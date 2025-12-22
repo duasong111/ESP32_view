@@ -8,6 +8,7 @@ class Contact {
   final String lastMessage;
   final DateTime lastMessageTime;
   final int unreadCount;
+  final String? publicKey; // 新增：联系人的公钥
 
   Contact({
     required this.id,
@@ -16,5 +17,6 @@ class Contact {
     required this.lastMessage,
     required this.lastMessageTime,
     this.unreadCount = 0,
+    this.publicKey,
   });
 }

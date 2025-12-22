@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
+import 'package:get/get.dart';
 import '../../shared/widgets/func_lists.dart';
+import '../api/services/auth_service.dart';
 
 // 移除不存在的 import
 class ProfileView extends StatefulWidget {
@@ -29,7 +31,7 @@ class _ProfileViewState extends State<ProfileView> {
     return const TDAvatar(
       size: TDAvatarSize.large,
       type: TDAvatarType.normal,
-      defaultUrl: 'assets/img/td_avatar_1.png',
+      defaultUrl: 'assets/images/avatar.png',
     );
   }
 
@@ -50,9 +52,7 @@ class _ProfileViewState extends State<ProfileView> {
           crossAxisAlignment: CrossAxisAlignment.center, // 垂直居中对齐所有 Row 子项
           children: [
             _buildImageAvatar(context),
-
             const Spacer(),
-
             Column(
               crossAxisAlignment: CrossAxisAlignment.end, // 按钮右对齐
               children: [
@@ -113,7 +113,34 @@ class _ProfileViewState extends State<ProfileView> {
                         textColor: const Color.fromARGB(255, 111, 151, 183),
                         icon: TDIcons.adjustment,
                       ),
+                      FunctionItem(
+                        title: '退出登录',
+                        background: const Color.fromARGB(255, 240, 240, 240),
+                        textColor: const Color.fromARGB(255, 73, 121, 205),
+                        icon: TDIcons.logout,
+                        onTap: () {
+                          // 使用GetX的默认对话框
+                          Get.defaultDialog(
+                            title: '退出登录',
+                            middleText: '确定要退出当前账号吗？',
+                            confirmTextColor: Colors.white,
+                            onConfirm: () async {
+                              // 调用退出登录方法
+                              await Get.find<AuthService>().logout();
+                              // 导航到登录页面
+                              Get.offAllNamed('/login');
+                            },
+                            onCancel: () {
+                              // 关闭对话框
+                              Get.back();
+                            },
+                            textConfirm: '确定',
+                            textCancel: '取消',
+                          );
+                        },
+                      ),
                     ],
+                    
                   ),
                 ],
               ),

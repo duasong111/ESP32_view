@@ -2,6 +2,8 @@
 import 'package:get/get.dart';
 import '../app/main_view/login_view.dart';
 import '../app/main_view/main_table_view.dart';
+import '../app/main_view/chat/chat_view.dart';
+import '../app/models/contact.dart';
 import 'auth_guard.dart';
 class AppRoutes {
   static const login = '/login';
@@ -21,6 +23,11 @@ class AppRoutes {
       name: home,
       page: () => MainTabView(),
       middlewares: [AuthGuard()], // 添加路由守卫
+      transition: Transition.fadeIn,
+    ),
+    GetPage(
+      name: chat,
+      page: () => ChatView(contact: Get.arguments as Contact),
       transition: Transition.fadeIn,
     ),
   ];

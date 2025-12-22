@@ -31,7 +31,7 @@ class _RegisterFormState extends State<RegisterForm> {
   // 全局算法实例
   final _pbkdf2 = Pbkdf2(
     macAlgorithm: Hmac.sha256(),
-    iterations: 600000, // 2025年推荐值
+    iterations: 600000,
     bits: 256,
   );
   final _aesGcm = AesGcm.with256bits();
@@ -103,7 +103,10 @@ class _RegisterFormState extends State<RegisterForm> {
         await _storage.write(key: 'current_username', value: username);
         
         final authService = Get.find<AuthService>();
-        await authService.setLogin(data['access']);
+        await authService.setLogin(data['access'], 
+          username: username, 
+          privateKey: privateKeyHex, 
+          publicKey: publicKeyHex);
 
         TDToast.showText('注册成功，已自动登录', context: context);
         Get.offAllNamed('/home');

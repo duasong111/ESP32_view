@@ -8,7 +8,11 @@ class App extends StatelessWidget {
   const App({super.key});
   // 初始化服务
   Future<void> initServices() async {
-    await Get.putAsync(() => AuthService().init());
+    // 如果AuthService已经存在，就不再初始化，避免热重载时重置登录状态
+    if (!Get.isRegistered<AuthService>()) {
+      // 设置permanent: true确保服务在整个应用生命周期中保持存在，避免热重载时丢失
+      await Get.putAsync(() => AuthService().init(), permanent: true);
+    }
   }
 
   @override
@@ -17,9 +21,11 @@ class App extends StatelessWidget {
       future: initServices(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.done) {
+          final authService = Get.find<AuthService>();
           return GetMaterialApp(
             debugShowCheckedModeBanner: false,
-            initialRoute: AppRoutes.login,
+            // 根据用户登录状态动态设置初始路由
+            initialRoute: authService.isLoggedIn.value ? AppRoutes.home : AppRoutes.login,
             getPages: AppRoutes.routes,
             unknownRoute: GetPage(
               name: '/notfound',

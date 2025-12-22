@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
 import 'home_view.dart';
-import 'function_view.dart';
-import 'profile_view.dart';
+import 'contact_view.dart';
+import 'my_view.dart';
 import 'login_view.dart';
 // 作用就是功能栏之间的切换步骤等
 class MainTabController extends GetxController {
@@ -13,7 +13,7 @@ class MainTabController extends GetxController {
   final pages = [
     // LoginView(),
     const HomeView(),
-    const FunctionView(),
+    const ContactView(),
     const ProfileView(),
   ];
 
@@ -46,7 +46,7 @@ class MainTabView extends StatelessWidget {
           ),
           BottomNavigationBarItem(
             icon: Icon(TDIcons.app),
-            label: '通讯录',
+            label: '联系人',
           ),
           BottomNavigationBarItem(
             icon: Icon(TDIcons.user),

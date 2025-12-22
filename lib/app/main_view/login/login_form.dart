@@ -1,8 +1,16 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:uuid/uuid.dart';
+import 'package:get/get.dart';
+import 'package:cryptography/cryptography.dart';
 import '../../api/client/dio_client.dart';
 import '../../api/endpoints.dart';
+import '../../api/services/auth_service.dart';
+
 class LoginForm extends StatefulWidget {
   const LoginForm({super.key});
   @override
@@ -13,8 +21,10 @@ class _LoginFormState extends State<LoginForm> {
   final _accountController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _agreeProtocol = true; // 默认勾选
+  final _storage = FlutterSecureStorage();
+  final _uuid = Uuid();
 
-  void _login() {
+  Future<void> _login() async {
     if (!_agreeProtocol) {
       TDToast.showText('请阅读并同意用户协议和隐私政策', context: context);
       return;
@@ -23,19 +33,111 @@ class _LoginFormState extends State<LoginForm> {
       TDToast.showText('请填写账号和密码', context: context);
       return;
     }
-    //增加用户登录接口
-    // final response = await DioClient().post(
+    // 读取或生成设备ID
+    String deviceId = await _storage.read(key: 'device_id') ?? _uuid.v4();
+    await _storage.write(key: 'device_id', value: deviceId);
+    final response = await DioClient().post(
 
-    //     Endpoints.loginEndpoint,
-    //     data: {
-    //       'username': _accountController.text,
-    //       'password': _passwordController.text,
-    //     },
-    //   );
+        Endpoints.loginEndpoint,
+        data: {
+          'username': _accountController.text,
+          'password': _passwordController.text,
+          'device_id': deviceId,
+        },
+      );
+    if (response.statusCode == 200) {
+      try {
+        // 登录成功，保存token等操作
+        final authService = Get.find<AuthService>();
+        final accessToken = response.data['access'];
+        final refreshToken = response.data['refresh'];
+        
+        // 从响应中提取用户信息
+        String username = _accountController.text;
+        String publicKey = '';
+        String privateKey = '';
+        
+        // 尝试从不同位置提取私钥 - 检查更多可能的字段名
+        List<String> possiblePrivateKeyFields = [
+          'private_key',
+          'privateKey',
+          'private-key',
+          'user_private_key',
+          'userPrivateKey',
+          'rsa_private_key',
+          'rsaPrivateKey'
+        ];
+        
 
-
-
-    TDToast.showText('登录成功！', context: context);
+        
+        // 尝试从user字段的所有可能字段名中提取
+        if (response.data.containsKey('user') && response.data['user'] is Map) {
+          Map userMap = response.data['user'] as Map;
+          username = userMap['username'] ?? userMap['name'] ?? _accountController.text;
+          publicKey = userMap['public_key'] ?? userMap['publicKey'] ?? '';
+          
+          // 尝试从user字段的所有可能私钥字段名中提取
+          for (String fieldName in possiblePrivateKeyFields) {
+            if (userMap.containsKey(fieldName)) {
+              privateKey = userMap[fieldName] ?? '';
+              break;
+            }
+          }
+        }
+        
+        // 如果user字段中没有找到私钥，尝试从响应顶层提取
+        if (privateKey.isEmpty) {
+          for (String fieldName in possiblePrivateKeyFields) {
+            if (response.data.containsKey(fieldName)) {
+              privateKey = response.data[fieldName] ?? '';
+              break;
+            }
+          }
+        }
+        
+        // 提取公钥（如果还没提取到）
+        if (publicKey.isEmpty && response.data.containsKey('user') && response.data['user'] is Map) {
+          Map userMap = response.data['user'] as Map;
+          publicKey = userMap['public_key'] ?? userMap['publicKey'] ?? '';
+        }
+        if (publicKey.isEmpty && response.data.containsKey('public_key')) {
+          publicKey = response.data['public_key'] ?? response.data['publicKey'] ?? '';
+        }
+        
+        // 检查user字段（如果存在）
+        if (response.data.containsKey('user')) {
+          if (response.data['user'] is Map) {
+            Map userMap = response.data['user'] as Map;
+            
+          }
+        }
+        if (accessToken != null && accessToken is String) {
+          // 先保存基本登录信息
+          await authService.setLogin(
+            accessToken, 
+            username: username, 
+            publicKey: publicKey, 
+            privateKey: privateKey
+          );
+          
+          // 使用登录密码解密私钥
+          await _decryptPrivateKey();
+          
+          TDToast.showText('登录成功！', context: context);
+          Navigator.pushReplacementNamed(context, '/home');
+        } else {
+          TDToast.showText('登录失败：服务器返回数据异常', context: context);
+          return;
+        }
+      } catch (e, stackTrace) {
+        TDToast.showText('登录成功但处理数据失败', context: context);
+        Navigator.pushReplacementNamed(context, '/home');
+      }
+    } else {
+      // 登录失败，提示用户
+      TDToast.showText('登录失败，请检查账号密码', context: context);
+    }
+    // TDToast.showText('登录成功！', context: context);
     // Navigator.pushReplacementNamed(context, '/home');
   }
 
@@ -65,11 +167,32 @@ class _LoginFormState extends State<LoginForm> {
     );
   }
 
+  // 解密用户的私钥和公钥
+  Future<void> _decryptPrivateKey() async {
+    
+    try {
+      // 调用解密接口
+     final response = await DioClient().get(
+        Endpoints.encryptPrivateKeyEndpoint,
+      );
+      print('查看解密获取的内容...$response');
+      if (response.statusCode == 200 && response.data != null) {
+        TDToast.showText('私钥解密成功', context: context);
+      } else {
+        TDToast.showText('私钥解密失败', context: context);
+      }
+    } catch (e) {
+      print('私钥解密异常: $e');
+      TDToast.showText('私钥解密异常', context: context);
+    }
+  }
+
   @override
   void dispose() {
     _accountController.dispose();
     _passwordController.dispose();
     super.dispose();
+
   }
 
   @override
