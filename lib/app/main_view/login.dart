@@ -51,7 +51,7 @@ class _LoginViewState extends State<LoginView>
             ),
             const SizedBox(height: 40),
             const Text(
-              '欢迎来到小机灵鬼聊天APP',
+              'ESP32终端测试机1',
               style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 40),

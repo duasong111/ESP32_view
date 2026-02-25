@@ -7,6 +7,7 @@ class ChatMessage {
   final DateTime time;
 
   ChatMessage({
+    
     required this.text,
     required this.isMe,
     required this.time,

@@ -1,115 +1,134 @@
 // lib/app/utils/encryption_util.dart
+
+import 'dart:typed_data';
+import 'dart:math'; // 用于 Random.secure()
+
 import 'package:encrypt/encrypt.dart';
 import 'package:pointycastle/asymmetric/api.dart';
-import 'dart:convert';
-import 'dart:typed_data';
+import 'package:pointycastle/export.dart' as pc; // 关键：统一用 export.dart
 
-/// 加密工具类，用于实现RSA加密和解密功能
+/// 加密工具类，用于实现RSA非对称加密
 class EncryptionUtil {
+  static Map<String, String> generateRSAKeyPair() {
+  final secureRandom = pc.FortunaRandom();
+  final seed = List<int>.generate(32, (_) => Random.secure().nextInt(256));
+  secureRandom.seed(pc.KeyParameter(Uint8List.fromList(seed)));
+
+  final keyGen = pc.RSAKeyGenerator();
+  keyGen.init(
+    pc.ParametersWithRandom(
+      pc.RSAKeyGeneratorParameters(BigInt.from(65537), 2048, 64),
+      secureRandom,
+    ),
+  );
+
+  final pair = keyGen.generateKeyPair();
+  final publicKey = pair.publicKey as pc.RSAPublicKey;
+  final privateKey = pair.privateKey as pc.RSAPrivateKey;
+
+  final modulus = publicKey.modulus ?? BigInt.zero;
+  final d = privateKey.privateExponent ?? BigInt.zero;
+  final p = privateKey.p ?? BigInt.zero;
+  final q = privateKey.q ?? BigInt.zero;
+
+  return {
+    'publicKey': modulus.toRadixString(16),
+    'privateKey': d.toRadixString(16),
+    'p': p.toRadixString(16),
+    'q': q.toRadixString(16),
+  };
+}
+
   /// 使用公钥加密消息
-  static String encryptMessage(String message, String publicKeyString) {
+  static String encryptMessage(String message, String publicKeyHex) {
+    if (message.isEmpty || publicKeyHex.isEmpty) {
+      print('加密失败：消息或公钥为空');
+      return message;
+    }
     try {
-      if (publicKeyString.isEmpty) {
-        print('公钥为空，无法加密');
-        return message;
-      }
-
-      // 移除 0x 前缀
-      String hex = publicKeyString.replaceAll('0x', '').toLowerCase();
-
-      // 只移除一个前导的 00 字节（如果存在），这通常是后端为避免符号问题添加的
-      if (hex.startsWith('00')) {
+      String hex = publicKeyHex.replaceAll('0x', '').toLowerCase();
+      while (hex.startsWith('00')) {
         hex = hex.substring(2);
       }
-      if (hex.isEmpty) hex = '0'; // 防止全0
+      if (hex.isEmpty) hex = '0';
 
       final modulus = BigInt.parse(hex, radix: 16);
-      final exponent = BigInt.from(65537);
+      final publicKey = RSAPublicKey(modulus, BigInt.from(65537));
 
-      final publicKey = RSAPublicKey(modulus, exponent);
-
-      final encrypter = Encrypter(RSA(
-        publicKey: publicKey,
-        encoding: RSAEncoding.PKCS1, // 与后端保持一致
-      ));
-
-      final encrypted = encrypter.encrypt(message);
-      print('加密成功，密文: ${encrypted.base64}');
-      return encrypted.base64;
+      final encrypter =
+          Encrypter(RSA(publicKey: publicKey, encoding: RSAEncoding.PKCS1));
+      return encrypter.encrypt(message).base64;
     } catch (e) {
       print('加密失败: $e');
-      return message; // 失败返回明文，便于调试
+      return message;
     }
   }
 
-  /// 使用私钥解密消息
   static String decryptMessage(
-      String encryptedMessage, String privateKeyString) {
+    String encryptedBase64,
+    String privateKeyDHex,
+    String modulusNHex,
+  ) {
+    if (encryptedBase64.isEmpty) return '';
+    if (privateKeyDHex.isEmpty || modulusNHex.isEmpty) {
+      print('解密失败：私钥或模数为空');
+      return '[密钥缺失]';
+    }
+
     try {
-      // 确保私钥字符串不为空
-      if (privateKeyString.isEmpty) {
-        print('私钥为空，无法解密');
-        return encryptedMessage;
+      // 处理模数 n
+      String nHex = modulusNHex.replaceAll('0x', '').toLowerCase();
+      while (nHex.startsWith('00')) {
+        nHex = nHex.substring(2);
+      }
+      if (nHex.isEmpty) nHex = '0';
+      final modulus = BigInt.parse(nHex, radix: 16);
+
+      // 处理私钥 d
+      String dHex = privateKeyDHex.replaceAll('0x', '').toLowerCase();
+      if (dHex.length % 2 != 0) dHex = '0$dHex';
+      // 去掉前导零（可选，但保持一致）
+      while (dHex.startsWith('00') && dHex.length > 2) {
+        dHex = dHex.substring(2);
+      }
+      if (dHex.isEmpty) dHex = '0';
+      final d = BigInt.parse(dHex, radix: 16);
+
+      if (modulus == BigInt.zero || d == BigInt.zero) {
+        print('解密失败：解析后的 modulus 或 d 为零');
+        return '[密钥无效]';
       }
 
-      // 确保密文不为空
-      if (encryptedMessage.isEmpty) {
-        print('密文为空，无需解密');
-        return '';
-      }
+      final privateKey = RSAPrivateKey(modulus, d, null, null);
 
-      // 创建RSA解密器
-      final privateKey = 
-          RSAKeyParser().parse(privateKeyString) as RSAPrivateKey;
-      final encrypter = 
-          Encrypter(RSA(privateKey: privateKey, encoding: RSAEncoding.PKCS1));
+      final encrypter = Encrypter(RSA(
+        privateKey: privateKey,
+        encoding: RSAEncoding.PKCS1,
+      ));
 
-      // 解密消息，先尝试Base64，失败则尝试十六进制
-      String decrypted;
-      try {
-        // 先尝试Base64解密
-        decrypted = encrypter.decrypt(Encrypted.fromBase64(encryptedMessage));
-        print('Base64解密成功: $decrypted');
-      } catch (base64Error) {
-        print('Base64解密失败，尝试十六进制解密: $base64Error');
-        
-        // 移除十六进制前缀（如果有）
-        String hex = encryptedMessage.replaceAll('0x', '').toLowerCase();
-        
-        // 转换十六进制字符串为字节数组
-        final bytes = _hexToBytes(hex);
-        
-        // 使用字节数组解密
-        decrypted = encrypter.decrypt(Encrypted(bytes));
-        print('十六进制解密成功: $decrypted');
-      }
-
+      final decrypted =
+          encrypter.decrypt(Encrypted.fromBase64(encryptedBase64));
       return decrypted;
-    } catch (e) {
-      print('解密失败: $e');
-      print('密文内容: $encryptedMessage');
-      print('私钥: ${privateKeyString.substring(0, 50)}...'); // 只打印部分私钥
-      return encryptedMessage; // 解密失败时返回密文
+    } catch (e, stack) {
+      print('解密详细错误: $e');
+      print('密文: $encryptedBase64');
+      print('dHex 长度: ${privateKeyDHex.length}');
+      print('nHex 长度: ${modulusNHex.length}');
+      print(stack);
+      return '[解密失败: $e]';
     }
   }
 
-  /// 将十六进制字符串转换为字节数组
-  static Uint8List _hexToBytes(String hexString) {
-    // 移除可能的前缀
-    hexString = hexString.replaceAll('0x', '');
-
-    // 确保字符串长度为偶数
+  /// Hex 转 Bytes（备用）
+  static Uint8List hexToBytes(String hexString) {
+    hexString = hexString.replaceAll('0x', '').toLowerCase();
     if (hexString.length % 2 != 0) {
       hexString = '0$hexString';
     }
-
-    // 转换为字节数组
     final bytes = Uint8List(hexString.length ~/ 2);
     for (int i = 0; i < bytes.length; i++) {
-      final hex = hexString.substring(i * 2, (i + 1) * 2);
-      bytes[i] = int.parse(hex, radix: 16);
+      bytes[i] = int.parse(hexString.substring(i * 2, i * 2 + 2), radix: 16);
     }
-
     return bytes;
   }
 }

@@ -2,19 +2,18 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
-import 'home_view.dart';
-import 'contact_view.dart';
-import 'my_view.dart';
-import 'login_view.dart';
-// 作用就是功能栏之间的切换步骤等
+import 'home.dart';
+import 'functions.dart';
+import 'user_info.dart';
+import 'login.dart';
 class MainTabController extends GetxController {
-  var currentIndex = 0.obs;  // 当前选中的 tab
+  var currentIndex = 0.obs;  
 
   final pages = [
     // LoginView(),
     const HomeView(),
     const ContactView(),
-    const ProfileView(),
+    const MyView(),
   ];
 
   void changeTab(int index) {
@@ -42,11 +41,11 @@ class MainTabView extends StatelessWidget {
         items: const [
           BottomNavigationBarItem(
             icon: Icon(TDIcons.chat_bubble),
-            label: '聊天',
+            label: '首界面',
           ),
           BottomNavigationBarItem(
             icon: Icon(TDIcons.app),
-            label: '联系人',
+            label: '功能栏',
           ),
           BottomNavigationBarItem(
             icon: Icon(TDIcons.user),

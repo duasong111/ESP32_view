@@ -43,6 +43,8 @@ dependencies:
   web_socket_channel: ^2.4.0
   pointycastle: ^3.9.1
   encrypt: ^5.0.3
+  intl: ^0.20.2
+  image_picker: ^1.0.7
 
 
 dev_dependencies:

@@ -1,20 +1,18 @@
 // lib/modules/auth/widgets/register_form.dart
-import 'dart:convert';
-import 'dart:typed_data';
+
 import 'dart:async';
-import '../../../app/api/services/auth_service.dart';
+
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:tdesign_flutter/tdesign_flutter.dart';
+
+import '../../../app/api/services/auth_service.dart';
 import '../../api/client/dio_client.dart';
 import '../../api/endpoints.dart';
-import 'package:cryptography/cryptography.dart';
-import 'package:ed25519_hd_key/ed25519_hd_key.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:tdesign_flutter/tdesign_flutter.dart';
-import 'package:uuid/uuid.dart';
 
 class RegisterForm extends StatefulWidget {
   const RegisterForm({super.key});
+
   @override
   State<RegisterForm> createState() => _RegisterFormState();
 }
@@ -25,16 +23,6 @@ class _RegisterFormState extends State<RegisterForm> {
   final _confirmPasswordController = TextEditingController();
 
   bool _isLoading = false;
-  final _storage = const FlutterSecureStorage();
-  final _uuid = const Uuid();
-
-  // 全局算法实例
-  final _pbkdf2 = Pbkdf2(
-    macAlgorithm: Hmac.sha256(),
-    iterations: 600000,
-    bits: 256,
-  );
-  final _aesGcm = AesGcm.with256bits();
 
   Future<void> _register() async {
     final username = _usernameController.text.trim();
@@ -53,60 +41,53 @@ class _RegisterFormState extends State<RegisterForm> {
       TDToast.showText('密码至少8位', context: context);
       return;
     }
+
     setState(() => _isLoading = true);
+
     try {
-      // 1. 生成密钥对
-      final seed = List<int>.generate(32, (_) => DateTime.now().microsecond + _.hashCode);
-      final master = await ED25519_HD_KEY.getMasterKeyFromSeed(seed);
-      // 现在使用的是Ed25519算法生成密钥对-比传统的体积更小，加密型更强
-      final privateKey = master.key;
-      final publicKeyObj = await ED25519_HD_KEY.getPublicKey(privateKey);
-      final privateKeyHex = uint8ListToHex(Uint8List.fromList(privateKey));
-      final publicKeyHex = uint8ListToHex(Uint8List.fromList(publicKeyObj));      
-      final salt = SecretKeyData.random(length: 16).bytes;
-      final iv = SecretKeyData.random(length: 12).bytes; // AES-GCM 推荐 12 字节
-      final secretKey = await _pbkdf2.deriveKey(
-        secretKey: SecretKey(utf8.encode(password)),
-        nonce: salt,
-      );
-      final secretBox = await _aesGcm.encrypt(
-        privateKey,
-        secretKey: secretKey,
-        nonce: iv,
-      );
-      final encryptedPrivateKeyBase64 = base64Encode(secretBox.concatenation());
-      final ivBase64 = base64Encode(iv);
-      final saltBase64 = base64Encode(salt);
-      String deviceId = await _storage.read(key: 'device_id') ?? _uuid.v4();
-      await _storage.write(key: 'device_id', value: deviceId);
+      // 打印请求信息
+      print('=== 注册请求 ===');
+      print('URL: ${Endpoints.baseUrl}${Endpoints.register}');
+      print('请求数据: {"username": "$username", "password": "$password"}');
+      
+      // 发送注册请求
       final response = await DioClient().post(
-        Endpoints.registerEndpoint,
+        Endpoints.register,
         data: {
           "username": username,
           "password": password,
-          "public_key": publicKeyHex,
-          "device_id": deviceId,
-          "encrypted_private_key": encryptedPrivateKeyBase64,
-          "encryption_params": jsonEncode({
-            "iv": ivBase64,
-            "salt": saltBase64,
-          }),
-          "encryption_method": "password_pbkdf2_aes256gcm",
         },
       );
+      
+      // 打印响应信息
+      print('=== 注册响应 ===');
+      print('状态码: ${response.statusCode}');
+      print('响应数据: ${response.data}');
+
       if (response.statusCode == 201) {
         final data = response.data;
-        await _storage.write(key: 'private_key', value: privateKeyHex);
-        await _storage.write(key: 'public_key', value: publicKeyHex);
-        await _storage.write(key: 'access_token', value: data['access']);
-        await _storage.write(key: 'refresh_token', value: data['refresh']);
-        await _storage.write(key: 'current_username', value: username);
+        print('注册响应: $data');
         
+        // 检查响应是否包含data字段
+        if (!data.containsKey('data') || data['data'] == null) {
+          TDToast.showText('注册失败：响应格式错误', context: context);
+          return;
+        }
+        
+        final dataContent = data['data'];
+        final String? accessToken = dataContent['token'];
+
+        if (accessToken == null || accessToken.isEmpty) {
+          TDToast.showText('注册失败：未返回访问令牌', context: context);
+          return;
+        }
+
+        // 更新 AuthService
         final authService = Get.find<AuthService>();
-        await authService.setLogin(data['access'], 
-          username: username, 
-          privateKey: privateKeyHex, 
-          publicKey: publicKeyHex);
+        await authService.setLogin(
+          accessToken,
+          username: username,
+        );
 
         TDToast.showText('注册成功，已自动登录', context: context);
         Get.offAllNamed('/home');
@@ -114,16 +95,13 @@ class _RegisterFormState extends State<RegisterForm> {
         final error = response.data['error'] ?? '注册失败';
         TDToast.showText(error, context: context);
       }
-    } catch (e) {
-      TDToast.showText('网络异常：$e', context: context);
+    } catch (e, stack) {
+      print('注册异常: $e');
+      print(stack);
+      TDToast.showText('注册失败：网络错误', context: context);
     } finally {
       setState(() => _isLoading = false);
     }
-  }
-
-  // 工具函数
-  String uint8ListToHex(Uint8List bytes) {
-    return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
   }
 
   @override

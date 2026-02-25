@@ -5,14 +5,14 @@ import '../../shared/widgets/func_lists.dart';
 import '../api/services/auth_service.dart';
 
 // 移除不存在的 import
-class ProfileView extends StatefulWidget {
-  const ProfileView({super.key});
+class MyView extends StatefulWidget {
+  const MyView({super.key});
 
   @override
-  State<ProfileView> createState() => _ProfileViewState();
+  State<MyView> createState() => _MyViewState();
 }
 
-class _ProfileViewState extends State<ProfileView> {
+class _MyViewState extends State<MyView> {
   // 构建填充按钮
   TDButton _buildLightFillButton(BuildContext context, String text) {
     return TDButton(
@@ -43,7 +43,6 @@ class _ProfileViewState extends State<ProfileView> {
     );
   }
 
-  // 构建卡片主体：左侧头像，右侧两个按钮
   Widget _buildCard(BuildContext context) {
     return Card(
       child: Padding(
@@ -54,10 +53,10 @@ class _ProfileViewState extends State<ProfileView> {
             _buildImageAvatar(context),
             const Spacer(),
             Column(
-              crossAxisAlignment: CrossAxisAlignment.end, // 按钮右对齐
+              crossAxisAlignment: CrossAxisAlignment.end, 
               children: [
                 _buildLightFillButton(context, '修改资料'),
-                const SizedBox(height: 12), // 按钮间的垂直间隔
+                const SizedBox(height: 12), 
                 _buildLightFillButton(context, '查看主页'),
               ],
             ),
@@ -74,17 +73,13 @@ class _ProfileViewState extends State<ProfileView> {
       data: TDThemeData.defaultData(),
       child: Scaffold(
         appBar: const TDNavBar(
-          // 改为 const
           title: '我的',
         ),
-        // 使用 ListView 代替 Center/Column，更适合滚动和边距控制
         body: ListView(
           padding: EdgeInsets.zero,
           children: [
             SizedBox(height: verticalSpacerHeight), // 顶部间隔
-
             Padding(
-              // 假设卡片宽度占据屏幕的 96%，左右各留 2%
               padding: EdgeInsets.symmetric(
                 horizontal: MediaQuery.of(context).size.width * 0.02,
               ),
@@ -98,17 +93,11 @@ class _ProfileViewState extends State<ProfileView> {
                         title: '设置',
                         background: const Color.fromARGB(255, 71, 144, 226),
                         textColor: Colors.white,
-                        icon: TDIcons.setting, // ← 就是这一行！加上图标
+                        icon: TDIcons.setting, 
                         onTap: () {},
                       ),
                       FunctionItem(
-                        title: '朋友圈',
-                        background: const Color.fromARGB(255, 240, 240, 240),
-                        textColor: const Color.fromARGB(255, 111, 151, 183),
-                        icon: TDIcons.anchor,
-                      ),
-                      FunctionItem(
-                        title: '开发记录',
+                        title: '添加记录',
                         background: const Color.fromARGB(255, 240, 240, 240),
                         textColor: const Color.fromARGB(255, 111, 151, 183),
                         icon: TDIcons.adjustment,
@@ -119,19 +108,15 @@ class _ProfileViewState extends State<ProfileView> {
                         textColor: const Color.fromARGB(255, 73, 121, 205),
                         icon: TDIcons.logout,
                         onTap: () {
-                          // 使用GetX的默认对话框
                           Get.defaultDialog(
                             title: '退出登录',
                             middleText: '确定要退出当前账号吗？',
                             confirmTextColor: Colors.white,
                             onConfirm: () async {
-                              // 调用退出登录方法
                               await Get.find<AuthService>().logout();
-                              // 导航到登录页面
                               Get.offAllNamed('/login');
                             },
                             onCancel: () {
-                              // 关闭对话框
                               Get.back();
                             },
                             textConfirm: '确定',
@@ -140,7 +125,6 @@ class _ProfileViewState extends State<ProfileView> {
                         },
                       ),
                     ],
-                    
                   ),
                 ],
               ),

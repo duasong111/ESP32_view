@@ -1,12 +1,7 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:uuid/uuid.dart';
 import 'package:get/get.dart';
-import 'package:cryptography/cryptography.dart';
 import '../../api/client/dio_client.dart';
 import '../../api/endpoints.dart';
 import '../../api/services/auth_service.dart';
@@ -21,8 +16,6 @@ class _LoginFormState extends State<LoginForm> {
   final _accountController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _agreeProtocol = true; // 默认勾选
-  final _storage = FlutterSecureStorage();
-  final _uuid = Uuid();
 
   Future<void> _login() async {
     if (!_agreeProtocol) {
@@ -33,112 +26,46 @@ class _LoginFormState extends State<LoginForm> {
       TDToast.showText('请填写账号和密码', context: context);
       return;
     }
-    // 读取或生成设备ID
-    String deviceId = await _storage.read(key: 'device_id') ?? _uuid.v4();
-    await _storage.write(key: 'device_id', value: deviceId);
+    
     final response = await DioClient().post(
-
-        Endpoints.loginEndpoint,
-        data: {
-          'username': _accountController.text,
-          'password': _passwordController.text,
-          'device_id': deviceId,
-        },
-      );
+      Endpoints.login,
+      data: {
+        'username': _accountController.text,
+        'password': _passwordController.text,
+      },
+    );
+    
     if (response.statusCode == 200) {
       try {
-        // 登录成功，保存token等操作
-        final authService = Get.find<AuthService>();
-        final accessToken = response.data['access'];
-        final refreshToken = response.data['refresh'];
+        final data = response.data;
         
-        // 从响应中提取用户信息
-        String username = _accountController.text;
-        String publicKey = '';
-        String privateKey = '';
-        
-        // 尝试从不同位置提取私钥 - 检查更多可能的字段名
-        List<String> possiblePrivateKeyFields = [
-          'private_key',
-          'privateKey',
-          'private-key',
-          'user_private_key',
-          'userPrivateKey',
-          'rsa_private_key',
-          'rsaPrivateKey'
-        ];
-        
-
-        
-        // 尝试从user字段的所有可能字段名中提取
-        if (response.data.containsKey('user') && response.data['user'] is Map) {
-          Map userMap = response.data['user'] as Map;
-          username = userMap['username'] ?? userMap['name'] ?? _accountController.text;
-          publicKey = userMap['public_key'] ?? userMap['publicKey'] ?? '';
-          
-          // 尝试从user字段的所有可能私钥字段名中提取
-          for (String fieldName in possiblePrivateKeyFields) {
-            if (userMap.containsKey(fieldName)) {
-              privateKey = userMap[fieldName] ?? '';
-              break;
-            }
-          }
-        }
-        
-        // 如果user字段中没有找到私钥，尝试从响应顶层提取
-        if (privateKey.isEmpty) {
-          for (String fieldName in possiblePrivateKeyFields) {
-            if (response.data.containsKey(fieldName)) {
-              privateKey = response.data[fieldName] ?? '';
-              break;
-            }
-          }
-        }
-        
-        // 提取公钥（如果还没提取到）
-        if (publicKey.isEmpty && response.data.containsKey('user') && response.data['user'] is Map) {
-          Map userMap = response.data['user'] as Map;
-          publicKey = userMap['public_key'] ?? userMap['publicKey'] ?? '';
-        }
-        if (publicKey.isEmpty && response.data.containsKey('public_key')) {
-          publicKey = response.data['public_key'] ?? response.data['publicKey'] ?? '';
-        }
-        
-        // 检查user字段（如果存在）
-        if (response.data.containsKey('user')) {
-          if (response.data['user'] is Map) {
-            Map userMap = response.data['user'] as Map;
-            
-          }
-        }
-        if (accessToken != null && accessToken is String) {
-          // 先保存基本登录信息
-          await authService.setLogin(
-            accessToken, 
-            username: username, 
-            publicKey: publicKey, 
-            privateKey: privateKey
-          );
-          
-          // 使用登录密码解密私钥
-          await _decryptPrivateKey();
-          
-          TDToast.showText('登录成功！', context: context);
-          Navigator.pushReplacementNamed(context, '/home');
-        } else {
-          TDToast.showText('登录失败：服务器返回数据异常', context: context);
+        // 检查响应是否包含data字段
+        if (!data.containsKey('data') || data['data'] == null) {
+          TDToast.showText('登录失败：响应格式错误', context: context);
           return;
         }
+        final dataContent = data['data'] as Map<String, dynamic>;
+        final dynamic tokenValue = dataContent['token'];
+        final String? accessToken = tokenValue?.toString();
+        if (accessToken == null || accessToken.isEmpty) {
+          TDToast.showText('登录失败：未返回访问令牌', context: context);
+          return;
+        }
+        final authService = Get.find<AuthService>();
+        final String username = _accountController.text.trim();
+        await authService.setLogin(
+          accessToken,
+          username: username,
+        );
+        TDToast.showText('登录成功！', context: context);
+        Get.offAllNamed('/home');
       } catch (e, stackTrace) {
-        TDToast.showText('登录成功但处理数据失败', context: context);
-        Navigator.pushReplacementNamed(context, '/home');
+        TDToast.showText('登录异常，请重试', context: context);
       }
     } else {
-      // 登录失败，提示用户
-      TDToast.showText('登录失败，请检查账号密码', context: context);
+      final errorMsg = response.data['error'] ?? '请检查账号密码';
+      TDToast.showText('登录失败：$errorMsg', context: context);
     }
-    // TDToast.showText('登录成功！', context: context);
-    // Navigator.pushReplacementNamed(context, '/home');
   }
 
   // 显示协议弹窗
@@ -146,11 +73,9 @@ class _LoginFormState extends State<LoginForm> {
     Navigator.of(context).push(
       TDSlidePopupRoute(
         slideTransitionFrom: SlideTransitionFrom.bottom,
-        // barrierDismissible: false,
         builder: (context) {
           return TDPopupBottomConfirmPanel(
             title: title,
-            // showAction: false, // 不显示底部按钮
             child: Container(
               padding: const EdgeInsets.all(20),
               height: 400,
@@ -167,32 +92,11 @@ class _LoginFormState extends State<LoginForm> {
     );
   }
 
-  // 解密用户的私钥和公钥
-  Future<void> _decryptPrivateKey() async {
-    
-    try {
-      // 调用解密接口
-     final response = await DioClient().get(
-        Endpoints.encryptPrivateKeyEndpoint,
-      );
-      print('查看解密获取的内容...$response');
-      if (response.statusCode == 200 && response.data != null) {
-        TDToast.showText('私钥解密成功', context: context);
-      } else {
-        TDToast.showText('私钥解密失败', context: context);
-      }
-    } catch (e) {
-      print('私钥解密异常: $e');
-      TDToast.showText('私钥解密异常', context: context);
-    }
-  }
-
   @override
   void dispose() {
     _accountController.dispose();
     _passwordController.dispose();
     super.dispose();
-
   }
 
   @override
@@ -244,10 +148,10 @@ class _LoginFormState extends State<LoginForm> {
               const Text('我已阅读并同意'),
               GestureDetector(
                 onTap: () => _showProtocol('用户协议', '''
-                《ArrivalAreaChat 用户协议》
-                欢迎使用 ArrivalAreaChat！本协议是您与 ArrivalAreaChat（以下简称“我们”）之间关于使用本软件服务的法律协议。
+                《Esp32_view 用户协议》
+                欢迎使用 Esp32_view！本协议是您与 Esp32_view（以下简称“我们”）之间关于使用本软件服务的法律协议。
                 1. 服务内容
-                  我们提供即时通讯、文件传输、群聊等功能。
+                  我们提供设备管理、数据查看等功能。
                 2. 用户权利与义务
                   您应保证注册信息真实有效，不得利用本软件从事违法活动。
                 3. 隐私保护
@@ -262,16 +166,15 @@ class _LoginFormState extends State<LoginForm> {
                 ),
               ),
               const Text('和'),
-
               GestureDetector(
                 onTap: () => _showProtocol('隐私政策', '''
-                《ArrivalAreaChat 隐私政策》
+                《Esp32_view 隐私政策》
                 我们非常重视您的隐私保护。本政策说明我们如何收集、使用和保护您的个人信息。
                 1. 我们收集的信息
-                  - 您主动提供的：手机号、昵称、头像等
+                  - 您主动提供的：用户名等
                   - 自动收集：设备信息、日志信息
                 2. 信息使用目的
-                  - 提供聊天服务
+                  - 提供设备管理服务
                   - 改进产品体验
                   - 保障账户安全
                 3. 信息共享
