@@ -24,5 +24,6 @@ class Endpoints {
   static String get wsBaseUrl => baseUrl.replaceFirst('http://', 'ws://');
   static const String esp32Data = '/esp32/data';  // ESP32 数据推送
   static const String rgbControl = '/api/device/rgb';  // RGB 控制
+  static const String buzzerControl = '/api/device/buzzer';  // 蜂鸣器控制
 
 }

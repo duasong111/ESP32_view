@@ -22,6 +22,12 @@ class _HomeViewState extends State<HomeView> {
   // RGB 控制参数
   String selectedColor = 'blue';
   int brightness = 30;
+  
+  // 蜂鸣器控制参数
+  int buzzerFrequency = 2000;
+  int buzzerDuration = 500;
+  int buzzerInterval = 200;
+  int buzzerCycles = 3;
 
   /// 发送 RGB 控制命令
   Future<void> _sendRgbControl(bool isOn) async {
@@ -53,6 +59,35 @@ class _HomeViewState extends State<HomeView> {
   Future<void> _updateRgbParams() async {
     if (lightOn) {
       await _sendRgbControl(true);
+    }
+  }
+  
+  /// 发送蜂鸣器控制命令
+  Future<void> _sendBuzzerControl(bool isOn) async {
+    try {
+      final url = Uri.parse('${Endpoints.baseUrl}${Endpoints.buzzerControl}');
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'type': 'buzzer',
+          'state': isOn ? 'on' : 'off',
+          'frequency': buzzerFrequency,
+          'duration': buzzerDuration,
+          'interval': buzzerInterval,
+          'cycles': buzzerCycles,
+        }),
+      );
+      debugPrint('蜂鸣器控制响应: ${response.statusCode}');
+      if (response.statusCode == 200) {
+        debugPrint('控制成功: ${response.body}');
+      } else {
+        debugPrint('控制失败: ${response.body}');
+      }
+    } catch (e) {
+      debugPrint('发送蜂鸣器控制命令失败: $e');
     }
   }
 
@@ -110,13 +145,19 @@ class _HomeViewState extends State<HomeView> {
                     setState(() => otherSwitchOn = v);
                   },
                 ),
-                 IoTSwitchCard(
-                  title: '蜂鸣器',
-                  value: buzzerOn,
-                  accentColor: const Color.fromARGB(255, 207, 88, 19),
-                  onChanged: (v) {
-                    setState(() => buzzerOn = v);
+                 GestureDetector(
+                  onTap: () {
+                    _showBuzzerControlDialog();
                   },
+                  child: IoTSwitchCard(
+                    title: '蜂鸣器',
+                    value: buzzerOn,
+                    accentColor: const Color.fromARGB(255, 207, 88, 19),
+                    onChanged: (v) {
+                      setState(() => buzzerOn = v);
+                      _sendBuzzerControl(v);
+                    },
+                  ),
                 ),
               ],
             ),
@@ -148,6 +189,158 @@ class _HomeViewState extends State<HomeView> {
       case 'white': return Colors.white;
       default: return Colors.blue;
     }
+  }
+  
+  /// 显示蜂鸣器控制对话框
+  void _showBuzzerControlDialog() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              title: const Text('蜂鸣器控制'),
+              content: SizedBox(
+                width: 300,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // 开关控制
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('开关'),
+                        Switch(
+                          value: buzzerOn,
+                          onChanged: (v) {
+                            setState(() => buzzerOn = v);
+                            setStateDialog(() {});
+                            _sendBuzzerControl(v);
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    // 频率调节
+                    Text('频率: $buzzerFrequency Hz', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 8),
+                    Slider(
+                      value: buzzerFrequency.toDouble(),
+                      min: 100,
+                      max: 10000,
+                      divisions: 99,
+                      onChanged: (value) {
+                        setState(() {
+                          buzzerFrequency = value.toInt();
+                        });
+                        setStateDialog(() {});
+                      },
+                      onChangeEnd: (value) {
+                        setState(() {
+                          buzzerFrequency = value.toInt();
+                          if (buzzerOn) {
+                            _sendBuzzerControl(true);
+                          }
+                        });
+                        setStateDialog(() {});
+                      },
+                      activeColor: Colors.orange,
+                    ),
+                    const SizedBox(height: 20),
+                    // 持续时间调节
+                    Text('持续时间: $buzzerDuration ms', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 8),
+                    Slider(
+                      value: buzzerDuration.toDouble(),
+                      min: 50,
+                      max: 2000,
+                      divisions: 39,
+                      onChanged: (value) {
+                        setState(() {
+                          buzzerDuration = value.toInt();
+                        });
+                        setStateDialog(() {});
+                      },
+                      onChangeEnd: (value) {
+                        setState(() {
+                          buzzerDuration = value.toInt();
+                          if (buzzerOn) {
+                            _sendBuzzerControl(true);
+                          }
+                        });
+                        setStateDialog(() {});
+                      },
+                      activeColor: Colors.orange,
+                    ),
+                    const SizedBox(height: 20),
+                    // 间隔时间调节
+                    Text('间隔时间: $buzzerInterval ms', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 8),
+                    Slider(
+                      value: buzzerInterval.toDouble(),
+                      min: 50,
+                      max: 1000,
+                      divisions: 19,
+                      onChanged: (value) {
+                        setState(() {
+                          buzzerInterval = value.toInt();
+                        });
+                        setStateDialog(() {});
+                      },
+                      onChangeEnd: (value) {
+                        setState(() {
+                          buzzerInterval = value.toInt();
+                          if (buzzerOn) {
+                            _sendBuzzerControl(true);
+                          }
+                        });
+                        setStateDialog(() {});
+                      },
+                      activeColor: Colors.orange,
+                    ),
+                    const SizedBox(height: 20),
+                    // 循环次数调节
+                    Text('循环次数: $buzzerCycles', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 8),
+                    Slider(
+                      value: buzzerCycles.toDouble(),
+                      min: 1,
+                      max: 10,
+                      divisions: 9,
+                      onChanged: (value) {
+                        setState(() {
+                          buzzerCycles = value.toInt();
+                        });
+                        setStateDialog(() {});
+                      },
+                      onChangeEnd: (value) {
+                        setState(() {
+                          buzzerCycles = value.toInt();
+                          if (buzzerOn) {
+                            _sendBuzzerControl(true);
+                          }
+                        });
+                        setStateDialog(() {});
+                      },
+                      activeColor: Colors.orange,
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                  },
+                  child: const Text('确定'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
   
   /// 显示灯光控制对话框

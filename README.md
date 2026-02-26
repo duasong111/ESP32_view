@@ -199,6 +199,3 @@ MIT License
 **联系方式**：2272168170@qq.com
 **项目地址**：(https://github.com/duasong111/ESP32_view.git)
 
-# ESP32_view
-flutter做的ESP32的智能界面
-
