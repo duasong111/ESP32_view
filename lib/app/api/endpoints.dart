@@ -25,5 +25,6 @@ class Endpoints {
   static const String esp32Data = '/esp32/data';  // ESP32 数据推送
   static const String rgbControl = '/api/device/rgb';  // RGB 控制
   static const String buzzerControl = '/api/device/buzzer';  // 蜂鸣器控制
+  static const String modifyScreenText = '/api/device/screen/text';  // 修改屏幕文字
 
 }

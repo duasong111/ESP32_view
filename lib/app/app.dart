@@ -2,11 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../routes/app_pages.dart';
 import '../app/api/services/auth_service.dart';
+import '../app/api/services/setting_service.dart';
+
 class App extends StatelessWidget {
   const App({super.key});
   Future<void> initServices() async {
     if (!Get.isRegistered<AuthService>()) {
       await Get.putAsync(() => AuthService().init(), permanent: true);
+    }
+    if (!Get.isRegistered<SettingService>()) {
+      Get.put(SettingService(), permanent: true);
     }
   }
 

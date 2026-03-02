@@ -7,7 +7,9 @@ import 'package:intl/intl.dart';
 import '../../api/endpoints.dart';
 
 class TimeCard extends StatefulWidget {
-  const TimeCard({super.key});
+  final void Function(double temperature, double humidity, DateTime time)? onTemperatureUpdate;
+
+  const TimeCard({super.key, this.onTemperatureUpdate});
 
   @override
   State<TimeCard> createState() => _TimeCardState();
@@ -105,6 +107,8 @@ class _TimeCardState extends State<TimeCard> {
         _temperature = temperature;
         _humidity = humidity;
       });
+      
+      widget.onTemperatureUpdate?.call(temperature, humidity, time);
     } catch (e, stack) {
       debugPrint('Exception: $e');
     }

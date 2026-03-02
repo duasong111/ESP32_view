@@ -1,11 +1,14 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
 import '../main_view/home/time_card.dart';
 import '../../shared/widgets/iot_switch_card.dart';
 import '../main_view/home/upload_image_card.dart';
 import '../api/endpoints.dart';
+import '../api/services/setting_service.dart';
 class HomeView extends StatefulWidget {
   const HomeView({super.key});
 
@@ -28,6 +31,9 @@ class _HomeViewState extends State<HomeView> {
   int buzzerDuration = 500;
   int buzzerInterval = 200;
   int buzzerCycles = 3;
+  
+  // 温度提醒消息列表（只保留最近两条）
+  final List<String> _temperatureAlerts = [];
 
   /// 发送 RGB 控制命令
   Future<void> _sendRgbControl(bool isOn) async {
@@ -90,6 +96,27 @@ class _HomeViewState extends State<HomeView> {
       debugPrint('发送蜂鸣器控制命令失败: $e');
     }
   }
+  
+  /// 处理温度更新
+  void _handleTemperatureUpdate(double temperature, double humidity, DateTime time) {
+    final settingService = Get.find<SettingService>();
+    
+    if (!settingService.temperatureAlertEnabled) {
+      return;
+    }
+    
+    if (temperature > settingService.temperatureThreshold) {
+      final timeStr = DateFormat('HH:mm:ss').format(time);
+      final alertMessage = '[$timeStr] 温度 ${temperature.toStringAsFixed(1)}℃ 超过${settingService.temperatureThreshold.toStringAsFixed(1)}度';
+      
+      setState(() {
+        _temperatureAlerts.insert(0, alertMessage);
+        if (_temperatureAlerts.length > 2) {
+          _temperatureAlerts.removeLast();
+        }
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -107,7 +134,12 @@ class _HomeViewState extends State<HomeView> {
           children: [
             const SizedBox(height: 12),
             // 时间卡片
-            TimeCard(),
+            TimeCard(
+              onTemperatureUpdate: _handleTemperatureUpdate,
+            ),
+            const SizedBox(height: 16),
+            // 消息提醒卡片
+            if (_temperatureAlerts.isNotEmpty && Get.find<SettingService>().temperatureAlertEnabled) _buildNoticeBar(),
             const SizedBox(height: 16),
             // 小的功能卡片
             Wrap(
@@ -166,10 +198,6 @@ class _HomeViewState extends State<HomeView> {
             UploadImageCard(
       onImageSelected: (file) {
         debugPrint('选中的图片路径: ${file.path}');
-        // 这里以后可以：
-        // 1. 上传服务器
-        // 2. WebSocket 发送
-        // 3. ESP32 显示
       },
     ),
           ],
@@ -189,6 +217,75 @@ class _HomeViewState extends State<HomeView> {
       case 'white': return Colors.white;
       default: return Colors.blue;
     }
+  }
+  
+  /// 构建消息提醒卡片
+  Widget _buildNoticeBar() {
+    final size = MediaQuery.of(context).size;
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: TDNoticeBarStyle.generateTheme(context).backgroundColor,
+        borderRadius: const BorderRadius.all(Radius.circular(12)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0d000000),
+            blurRadius: 8,
+            spreadRadius: 2,
+            offset: Offset(0, 2),
+          ),
+          BoxShadow(
+            color: Color(0x0f000000),
+            blurRadius: 10,
+            spreadRadius: 1,
+            offset: Offset(0, 8),
+          ),
+          BoxShadow(
+            color: Color(0x1a000000),
+            blurRadius: 5,
+            spreadRadius: -3,
+            offset: Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: size.width - 32,
+            decoration: const BoxDecoration(
+              borderRadius: BorderRadius.all(Radius.circular(12)),
+            ),
+            clipBehavior: Clip.hardEdge,
+            child: TDNoticeBar(
+              content: '温度超过15度提醒',
+              prefixIcon: TDIcons.error_circle_filled,
+              suffixIcon: TDIcons.chevron_right,
+            ),
+          ),
+          Container(
+            width: size.width - 32,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: TDTheme.of(context).bgColorContainer,
+              borderRadius: const BorderRadius.all(Radius.circular(12)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (var alert in _temperatureAlerts)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      alert,
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                  ),
+              ],
+            ),
+          )
+        ],
+      ),
+    );
   }
   
   /// 显示蜂鸣器控制对话框

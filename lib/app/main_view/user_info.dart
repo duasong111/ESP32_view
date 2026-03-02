@@ -3,8 +3,7 @@ import 'package:tdesign_flutter/tdesign_flutter.dart';
 import 'package:get/get.dart';
 import '../../shared/widgets/func_lists.dart';
 import '../api/services/auth_service.dart';
-
-// 移除不存在的 import
+import 'userinfo/setting.dart';
 class MyView extends StatefulWidget {
   const MyView({super.key});
 
@@ -94,7 +93,9 @@ class _MyViewState extends State<MyView> {
                         background: const Color.fromARGB(255, 71, 144, 226),
                         textColor: Colors.white,
                         icon: TDIcons.setting, 
-                        onTap: () {},
+                        onTap: () {
+                          Get.to(() => const SettingView());
+                        },
                       ),
                       FunctionItem(
                         title: '添加记录',
