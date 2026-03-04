@@ -17,6 +17,9 @@ class _SettingViewState extends State<SettingView> {
   late double _temperatureThreshold;
   late bool _distanceAlertEnabled;
   late double _distanceThreshold;
+  late String _notificationType;
+  late String _notificationUrl;
+  final TextEditingController _urlController = TextEditingController();
 
   @override
   void initState() {
@@ -25,6 +28,15 @@ class _SettingViewState extends State<SettingView> {
     _temperatureThreshold = _settingService.temperatureThreshold;
     _distanceAlertEnabled = _settingService.distanceAlertEnabled;
     _distanceThreshold = _settingService.distanceThreshold;
+    _notificationType = _settingService.notificationType;
+    _notificationUrl = _settingService.notificationUrl;
+    _urlController.text = _notificationUrl;
+  }
+  
+  @override
+  void dispose() {
+    _urlController.dispose();
+    super.dispose();
   }
 
   @override
@@ -75,45 +87,90 @@ class _SettingViewState extends State<SettingView> {
           
           const SizedBox(height: 24),
           
-          // 距离提醒设置
-          _buildSectionHeader('距离提醒'),
-          _buildSettingCard(
-            children: [
-              _buildSwitchTile(
-                title: '启用距离提醒',
-                subtitle: '当距离小于阈值时显示提醒消息',
-                value: _distanceAlertEnabled,
-                onChanged: (value) {
-                  setState(() {
-                    _distanceAlertEnabled = value;
-                  });
-                  _settingService.setDistanceAlertEnabled(value);
-                },
+          // 自定义通知设置（抽屉样式）
+          _buildSectionHeader('自定义通知'),
+          Card(
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: ExpansionTile(
+              title: const Text(
+                '通知设置',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
-              if (_distanceAlertEnabled) ...[
+              subtitle: Text(
+                _getNotificationSubtitle(),
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+              leading: Icon(
+                Icons.notifications_active_outlined,
+                color: TDTheme.of(context).brandColor8,
+              ),
+              children: [
                 const TDDivider(),
-                _buildSliderTile(
-                  title: '距离阈值',
-                  value: _distanceThreshold,
-                  min: 10,
-                  max: 500,
-                  divisions: 49,
-                  unit: 'cm',
+                _buildRadioTile(
+                  title: '钉钉机器人',
+                  subtitle: '通过钉钉机器人发送通知',
+                  value: 'dingtalk',
+                  groupValue: _notificationType,
                   onChanged: (value) {
                     setState(() {
-                      _distanceThreshold = value;
+                      _notificationType = value!;
                     });
-                  },
-                  onChangeEnd: (value) {
-                    _settingService.setDistanceThreshold(value);
+                    _settingService.setNotificationType(value!);
                   },
                 ),
+                const TDDivider(),
+                _buildRadioTile(
+                  title: 'Bark 提醒',
+                  subtitle: '通过 Bark 推送通知',
+                  value: 'bark',
+                  groupValue: _notificationType,
+                  onChanged: (value) {
+                    setState(() {
+                      _notificationType = value!;
+                    });
+                    _settingService.setNotificationType(value!);
+                  },
+                ),
+                const TDDivider(),
+                _buildRadioTile(
+                  title: '不通知',
+                  subtitle: '关闭自定义通知',
+                  value: 'none',
+                  groupValue: _notificationType,
+                  onChanged: (value) {
+                    setState(() {
+                      _notificationType = value!;
+                    });
+                    _settingService.setNotificationType(value!);
+                  },
+                ),
+                if (_notificationType != 'none') ...[
+                  const TDDivider(),
+                  _buildUrlInput(),
+                ],
               ],
-            ],
+            ),
           ),
         ],
       ),
     );
+  }
+  
+  String _getNotificationSubtitle() {
+    switch (_notificationType) {
+      case 'dingtalk':
+        return '已启用钉钉机器人';
+      case 'bark':
+        return '已启用 Bark 提醒';
+      default:
+        return '未启用自定义通知';
+    }
   }
   
   Widget _buildSectionHeader(String title) {
@@ -196,6 +253,65 @@ class _SettingViewState extends State<SettingView> {
             onChanged: onChanged,
             onChangeEnd: onChangeEnd,
             activeColor: TDTheme.of(context).brandColor8,
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildRadioTile({
+    required String title,
+    required String subtitle,
+    required String value,
+    required String groupValue,
+    required ValueChanged<String?> onChanged,
+  }) {
+    return RadioListTile<String>(
+      title: Text(title),
+      subtitle: Text(
+        subtitle,
+        style: const TextStyle(fontSize: 12, color: Colors.grey),
+      ),
+      value: value,
+      groupValue: groupValue,
+      onChanged: onChanged,
+      activeColor: TDTheme.of(context).brandColor8,
+    );
+  }
+  
+  Widget _buildUrlInput() {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _notificationType == 'dingtalk' ? '钉钉机器人 Webhook URL' : 'Bark 推送 URL',
+            style: const TextStyle(fontSize: 14),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _urlController,
+            decoration: InputDecoration(
+              hintText: _notificationType == 'dingtalk' 
+                  ? 'https://oapi.dingtalk.com/robot/send?access_token=...'
+                  : 'https://api.day.app/YOUR_KEY/',
+              border: const OutlineInputBorder(),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            ),
+            onChanged: (value) {
+              _notificationUrl = value;
+            },
+            onSubmitted: (value) {
+              _settingService.setNotificationUrl(value);
+            },
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _notificationType == 'dingtalk' 
+                ? '请在钉钉群设置中获取机器人 Webhook 地址'
+                : '请在 Bark 应用中获取推送 URL',
+            style: const TextStyle(fontSize: 11, color: Colors.grey),
           ),
         ],
       ),

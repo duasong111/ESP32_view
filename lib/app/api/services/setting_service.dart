@@ -22,6 +22,14 @@ class SettingService extends GetxService {
   final _distanceThreshold = 100.0.obs;
   double get distanceThreshold => _distanceThreshold.value;
   
+  // 通知类型：dingtalk（钉钉机器人）、bark（Bark提醒）、none（不通知）
+  final _notificationType = 'none'.obs;
+  String get notificationType => _notificationType.value;
+  
+  // 通知 URL
+  final _notificationUrl = ''.obs;
+  String get notificationUrl => _notificationUrl.value;
+  
   @override
   void onInit() {
     super.onInit();
@@ -35,6 +43,8 @@ class SettingService extends GetxService {
       final tempThreshold = await _storage.read(key: 'temperature_threshold');
       final distEnabled = await _storage.read(key: 'distance_alert_enabled');
       final distThreshold = await _storage.read(key: 'distance_threshold');
+      final notificationType = await _storage.read(key: 'notification_type');
+      final notificationUrl = await _storage.read(key: 'notification_url');
       
       if (tempEnabled != null) {
         _temperatureAlertEnabled.value = tempEnabled == 'true';
@@ -47,6 +57,12 @@ class SettingService extends GetxService {
       }
       if (distThreshold != null) {
         _distanceThreshold.value = double.tryParse(distThreshold) ?? 100.0;
+      }
+      if (notificationType != null) {
+        _notificationType.value = notificationType;
+      }
+      if (notificationUrl != null) {
+        _notificationUrl.value = notificationUrl;
       }
     } catch (e) {
       print('加载设置失败: $e');
@@ -90,6 +106,26 @@ class SettingService extends GetxService {
       _distanceThreshold.value = threshold;
     } catch (e) {
       print('保存距离阈值失败: $e');
+    }
+  }
+  
+  /// 保存通知类型
+  Future<void> setNotificationType(String type) async {
+    try {
+      await _storage.write(key: 'notification_type', value: type);
+      _notificationType.value = type;
+    } catch (e) {
+      print('保存通知类型失败: $e');
+    }
+  }
+  
+  /// 保存通知 URL
+  Future<void> setNotificationUrl(String url) async {
+    try {
+      await _storage.write(key: 'notification_url', value: url);
+      _notificationUrl.value = url;
+    } catch (e) {
+      print('保存通知 URL 失败: $e');
     }
   }
 }

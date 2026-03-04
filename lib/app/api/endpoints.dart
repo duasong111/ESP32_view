@@ -3,7 +3,7 @@ class Endpoints {
   // 不同环境的基地址
   static const String _devAndroid = 'http://10.0.2.2:8000';
   static const String _devIOS = 'http://127.0.0.1:8000';
-  static const String _devRealDevice = 'http://192.168.18.236:8000';  // 改成你局域网IP
+  static const String _devRealDevice = 'http://192.168.18.215:8000';  // 改成你局域网IP
   static const String _prod = 'https://api.yourdomain.com';
 
   // 关键：增加一个可手动切换的标志（调试超级方便）
