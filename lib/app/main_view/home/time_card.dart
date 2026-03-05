@@ -3,8 +3,10 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import '../../api/endpoints.dart';
+import '../../api/services/environment_service.dart';
 
 class TimeCard extends StatefulWidget {
   final void Function(double temperature, double humidity, DateTime time)? onTemperatureUpdate;
@@ -80,15 +82,21 @@ class _TimeCardState extends State<TimeCard> {
 
       /// 外层 JSON
       final Map<String, dynamic> outer = jsonDecode(message);
-
-      if (!outer.containsKey('payload')) {
-        debugPrint('展示传输来的数据');
+      
+      Map<String, dynamic> payload;
+      
+      // 支持两种数据格式
+      if (outer.containsKey('payload')) {
+        /// payload 二次解析
+        final payloadRaw = outer['payload'];
+        payload = jsonDecode(payloadRaw);
+      } else if (outer.containsKey('time') && outer.containsKey('temperature')) {
+        /// 直接使用外层数据
+        payload = outer;
+      } else {
+        debugPrint('数据格式不正确: $outer');
         return;
       }
-
-      /// payload 二次解析
-      final payloadRaw = outer['payload'];
-      final Map<String, dynamic> payload = jsonDecode(payloadRaw);
 
       /// 时间
       final DateTime time = DateTime.parse(payload['time']);
@@ -108,9 +116,20 @@ class _TimeCardState extends State<TimeCard> {
         _humidity = humidity;
       });
       
+      // 更新全局环境数据
+      final environmentService = Get.find<EnvironmentService>();
+      environmentService.updateEnvironment(
+        temperature: temperature,
+        humidity: humidity,
+        time: time,
+      );
+      
       widget.onTemperatureUpdate?.call(temperature, humidity, time);
+      
+      debugPrint('环境数据已更新: 温度=$temperature°C, 湿度=$humidity%');
     } catch (e, stack) {
       debugPrint('Exception: $e');
+      debugPrint('StackTrace: $stack');
     }
   }
 

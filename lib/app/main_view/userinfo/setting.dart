@@ -12,7 +12,7 @@ class SettingView extends StatefulWidget {
 
 class _SettingViewState extends State<SettingView> {
   final SettingService _settingService = Get.find<SettingService>();
-  
+    
   late bool _temperatureAlertEnabled;
   late double _temperatureThreshold;
   late bool _distanceAlertEnabled;
@@ -20,6 +20,7 @@ class _SettingViewState extends State<SettingView> {
   late String _notificationType;
   late String _notificationUrl;
   final TextEditingController _urlController = TextEditingController();
+  bool _isNotificationExpanded = false;
 
   @override
   void initState() {
@@ -31,6 +32,7 @@ class _SettingViewState extends State<SettingView> {
     _notificationType = _settingService.notificationType;
     _notificationUrl = _settingService.notificationUrl;
     _urlController.text = _notificationUrl;
+    _isNotificationExpanded = _notificationType != 'none';
   }
   
   @override
@@ -87,72 +89,91 @@ class _SettingViewState extends State<SettingView> {
           
           const SizedBox(height: 24),
           
-          // 自定义通知设置（抽屉样式）
+          // 自定义通知设置
           _buildSectionHeader('自定义通知'),
           Card(
             elevation: 0,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
-            child: ExpansionTile(
-              title: const Text(
-                '通知设置',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              subtitle: Text(
-                _getNotificationSubtitle(),
-                style: const TextStyle(fontSize: 12, color: Colors.grey),
-              ),
-              leading: Icon(
-                Icons.notifications_active_outlined,
-                color: TDTheme.of(context).brandColor8,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const TDDivider(),
-                _buildRadioTile(
-                  title: '钉钉机器人',
-                  subtitle: '通过钉钉机器人发送通知',
-                  value: 'dingtalk',
-                  groupValue: _notificationType,
-                  onChanged: (value) {
+                ListTile(
+                  title: const Text(
+                    '通知设置',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  subtitle: Text(
+                    _getNotificationSubtitle(),
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                  leading: Icon(
+                    Icons.notifications_active_outlined,
+                    color: TDTheme.of(context).brandColor8,
+                  ),
+                  trailing: Icon(
+                    _isNotificationExpanded 
+                        ? Icons.expand_less 
+                        : Icons.expand_more,
+                  ),
+                  onTap: () {
                     setState(() {
-                      _notificationType = value!;
+                      _isNotificationExpanded = !_isNotificationExpanded;
                     });
-                    _settingService.setNotificationType(value!);
                   },
                 ),
-                const TDDivider(),
-                _buildRadioTile(
-                  title: 'Bark 提醒',
-                  subtitle: '通过 Bark 推送通知',
-                  value: 'bark',
-                  groupValue: _notificationType,
-                  onChanged: (value) {
-                    setState(() {
-                      _notificationType = value!;
-                    });
-                    _settingService.setNotificationType(value!);
-                  },
-                ),
-                const TDDivider(),
-                _buildRadioTile(
-                  title: '不通知',
-                  subtitle: '关闭自定义通知',
-                  value: 'none',
-                  groupValue: _notificationType,
-                  onChanged: (value) {
-                    setState(() {
-                      _notificationType = value!;
-                    });
-                    _settingService.setNotificationType(value!);
-                  },
-                ),
-                if (_notificationType != 'none') ...[
+                if (_isNotificationExpanded) ...[
                   const TDDivider(),
-                  _buildUrlInput(),
+                  _buildRadioTile(
+                    title: '钉钉机器人',
+                    subtitle: '通过钉钉机器人发送通知',
+                    value: 'dingtalk',
+                    groupValue: _notificationType,
+                    onChanged: (value) {
+                      setState(() {
+                        _notificationType = value!;
+                        _notificationUrl = _settingService.notificationUrl;
+                        _urlController.text = _notificationUrl;
+                      });
+                      _settingService.setNotificationType(value!);
+                    },
+                  ),
+                  const TDDivider(),
+                  _buildRadioTile(
+                    title: 'Bark 提醒',
+                    subtitle: '通过 Bark 推送通知',
+                    value: 'bark',
+                    groupValue: _notificationType,
+                    onChanged: (value) {
+                      setState(() {
+                        _notificationType = value!;
+                        _notificationUrl = _settingService.notificationUrl;
+                        _urlController.text = _notificationUrl;
+                      });
+                      _settingService.setNotificationType(value!);
+                    },
+                  ),
+                  const TDDivider(),
+                  _buildRadioTile(
+                    title: '不通知',
+                    subtitle: '关闭自定义通知',
+                    value: 'none',
+                    groupValue: _notificationType,
+                    onChanged: (value) {
+                      setState(() {
+                        _notificationType = value!;
+                      });
+                      _settingService.setNotificationType(value!);
+                    },
+                  ),
+                  if (_notificationType != 'none') ...[
+                    const TDDivider(),
+                    _buildUrlInput(),
+                  ],
                 ],
               ],
             ),
@@ -292,6 +313,7 @@ class _SettingViewState extends State<SettingView> {
           const SizedBox(height: 8),
           TextField(
             controller: _urlController,
+            autofocus: false,
             decoration: InputDecoration(
               hintText: _notificationType == 'dingtalk' 
                   ? 'https://oapi.dingtalk.com/robot/send?access_token=...'
@@ -301,10 +323,9 @@ class _SettingViewState extends State<SettingView> {
             ),
             onChanged: (value) {
               _notificationUrl = value;
-            },
-            onSubmitted: (value) {
               _settingService.setNotificationUrl(value);
             },
+            textInputAction: TextInputAction.done,
           ),
           const SizedBox(height: 8),
           Text(

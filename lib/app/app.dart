@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import '../routes/app_pages.dart';
 import '../app/api/services/auth_service.dart';
 import '../app/api/services/setting_service.dart';
+import '../app/api/services/environment_service.dart';
 
 class App extends StatelessWidget {
   const App({super.key});
@@ -12,6 +13,9 @@ class App extends StatelessWidget {
     }
     if (!Get.isRegistered<SettingService>()) {
       Get.put(SettingService(), permanent: true);
+    }
+    if (!Get.isRegistered<EnvironmentService>()) {
+      Get.put(EnvironmentService(), permanent: true);
     }
   }
 
