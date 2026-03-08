@@ -11,10 +11,10 @@ class InteractionPage extends StatelessWidget {
       body: Column(
         children: [
           const SizedBox(height: 20),
-          const Text("声控状态: 待机"),
+          const Text("距离触发状态: 正常"),
           const SizedBox(height: 20),
           TDButton(
-            text: "测试灯光",
+            text: "开启提醒",
             onTap: () {},
           ),
         ],

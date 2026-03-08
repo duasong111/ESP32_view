@@ -26,5 +26,8 @@ class Endpoints {
   static const String rgbControl = '/api/device/rgb';  // RGB 控制
   static const String buzzerControl = '/api/device/buzzer';  // 蜂鸣器控制
   static const String modifyScreenText = '/api/device/screen/text';  // 修改屏幕文字
-
+  static const String addBarkToken = '/api/device/accept_bark_token';  // 添加用户的Bark Token值
+  static const String setBarkThreshold = '/api/device/accept_threshold';  // 设置温湿度发阈值
+  static const String setDistanceThreshold = '/api/device/distance_threshold';  // 设置距离预警
+  static const String controlSelfThreshold = '/api/device/control_self';  // 控制自己的阈值
 }

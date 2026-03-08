@@ -1,24 +1,242 @@
-import 'package:flutter/material.dart';
-import 'package:tdesign_flutter/tdesign_flutter.dart';
+import 'dart:convert';
 
-class ReminderPage extends StatelessWidget {
+import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import 'package:http/http.dart' as http;
+import 'package:tdesign_flutter/tdesign_flutter.dart';
+import '../../api/endpoints.dart';
+import '../../api/services/auth_service.dart';
+import '../../api/services/setting_service.dart';
+
+class ReminderPage extends StatefulWidget {
   const ReminderPage({super.key});
+
+  @override
+  State<ReminderPage> createState() => _ReminderPageState();
+}
+
+class _ReminderPageState extends State<ReminderPage> {
+  final SettingService settingService = Get.find<SettingService>();
+  
+  final TextEditingController _deviceIdController = TextEditingController(text: 'ESP32_001');
+  late double _distanceMin;
+  late int _alertSeconds;
+  late bool _isActive;
+  
+  @override
+  void initState() {
+    super.initState();
+    _isActive = settingService.distanceAlertEnabled;
+    _distanceMin = settingService.distanceThreshold;
+    _alertSeconds = 300; // 默认预警间隔 300秒
+  }
+  
+  @override
+  void dispose() {
+    _deviceIdController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: const TDNavBar(title: '智能提醒'),
-      body: Column(
-        children: [
-          const SizedBox(height: 20),
-          const Text("距离触发状态: 正常"),
-          const SizedBox(height: 20),
-          TDButton(
-            text: "开启提醒",
-            onTap: () {},
-          ),
-        ],
+      body: SingleChildScrollView(
+        child: Column(
+          children: [
+            const SizedBox(height: 20),
+            
+            // 距离阈值设置卡片
+            Card(
+              margin: const EdgeInsets.symmetric(horizontal: 16),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          '距离预警设置',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                        Switch(
+                          value: _isActive,
+                          onChanged: (value) {
+                            setState(() {
+                              _isActive = value;
+                            });
+                            settingService.setDistanceAlertEnabled(value);
+                            _uploadDistanceThreshold();
+                          },
+                          activeColor: TDTheme.of(context).brandColor8,
+                        ),
+                      ],
+                    ),
+                    
+                    if (_isActive) ...[
+                      const SizedBox(height: 20),
+                      
+                      // 设备编号输入
+                      TextField(
+                        controller: _deviceIdController,
+                        decoration: const InputDecoration(
+                          labelText: '设备编号',
+                          hintText: '例如: ESP32_001',
+                          border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        ),
+                        onChanged: (value) {
+                          // 可以在这里添加验证逻辑
+                        },
+                      ),
+                      
+                      const SizedBox(height: 20),
+                      
+                      // 距离最小值
+                      _buildThresholdSlider(
+                        title: '距离最小值',
+                        value: _distanceMin,
+                        min: 0,
+                        max: 200,
+                        unit: 'cm',
+                        color: Colors.purple,
+                        onChanged: (value) {
+                          setState(() {
+                            _distanceMin = value;
+                          });
+                        },
+                        onChangeEnd: (value) {
+                          settingService.setDistanceThreshold(value);
+                          _uploadDistanceThreshold();
+                        },
+                      ),
+                      
+                      const SizedBox(height: 20),
+                      
+                      // 预警间隔时间
+                      _buildAlertSecondsSlider(),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            
+            const SizedBox(height: 20),
+          ],
+        ),
       ),
     );
+  }
+  
+  /// 构建预警间隔时间滑块
+  Widget _buildAlertSecondsSlider() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text('预警间隔时间', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+            Text(
+              '${(_alertSeconds / 60).toStringAsFixed(0)} 分钟',
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.green),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Slider(
+          value: _alertSeconds.toDouble(),
+          min: 60,
+          max: 3600,
+          divisions: 59,
+          onChanged: (value) {
+            setState(() {
+              _alertSeconds = value.toInt();
+            });
+          },
+          onChangeEnd: (value) {
+            _uploadDistanceThreshold();
+          },
+          activeColor: Colors.green,
+        ),
+      ],
+    );
+  }
+  
+  /// 构建阈值滑块
+  Widget _buildThresholdSlider({
+    required String title,
+    required double value,
+    required double min,
+    required double max,
+    required String unit,
+    required Color color,
+    required ValueChanged<double> onChanged,
+    required ValueChanged<double> onChangeEnd,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+            Text(
+              '${value.toStringAsFixed(1)} $unit',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: color),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Slider(
+          value: value,
+          min: min,
+          max: max,
+          divisions: (max - min).toInt(),
+          onChanged: onChanged,
+          onChangeEnd: onChangeEnd,
+          activeColor: color,
+        ),
+      ],
+    );
+  }
+  
+  /// 上传距离阈值到后端
+  Future<void> _uploadDistanceThreshold() async {
+    try {
+      final authService = Get.find<AuthService>();
+      final jwtToken = authService.token.value;
+      
+      if (jwtToken.isEmpty) {
+        debugPrint('JWT token 为空，无法上传距离阈值');
+        return;
+      }
+      
+      final apiUrl = Uri.parse('${Endpoints.baseUrl}${Endpoints.setDistanceThreshold}');
+      final response = await http.post(
+        apiUrl,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $jwtToken',
+        },
+        body: jsonEncode({
+          'device_id': _deviceIdController.text.trim(),
+          'distance_min': _distanceMin,
+          'alert_seconds': _alertSeconds,
+          'is_active': _isActive,
+        }),
+      );
+      
+      if (response.statusCode == 200) {
+        debugPrint('距离阈值上传成功: ${response.body}');
+        TDToast.showText('距离阈值已保存', context: context);
+      } else {
+        debugPrint('距离阈值上传失败: ${response.statusCode} - ${response.body}');
+      }
+    } catch (e) {
+      debugPrint('上传距离阈值失败: $e');
+    }
   }
 }

@@ -1,6 +1,12 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:http/http.dart' as http;
 import 'package:tdesign_flutter/tdesign_flutter.dart';
+import '../../api/endpoints.dart';
+import '../../api/services/auth_service.dart';
 import '../../api/services/setting_service.dart';
 
 class SettingView extends StatefulWidget {
@@ -324,6 +330,11 @@ class _SettingViewState extends State<SettingView> {
             onChanged: (value) {
               _notificationUrl = value;
               _settingService.setNotificationUrl(value);
+              
+              // 如果是 Bark URL，自动提取并发送 token
+              if (_notificationType == 'bark' && value.isNotEmpty) {
+                _sendBarkToken(value);
+              }
             },
             textInputAction: TextInputAction.done,
           ),
@@ -337,5 +348,78 @@ class _SettingViewState extends State<SettingView> {
         ],
       ),
     );
+  }
+  
+  /// 从 Bark URL 中提取 token 并发送到后端
+  Future<void> _sendBarkToken(String url) async {
+    try {
+      // 解析 URL 获取 token
+      final uri = Uri.parse(url);
+      final pathSegments = uri.pathSegments;
+      
+      if (pathSegments.isEmpty) {
+        debugPrint('Bark URL 格式不正确');
+        return;
+      }
+      
+      final token = pathSegments.first;
+      
+      if (token.isEmpty) {
+        debugPrint('无法从 URL 中提取 token');
+        return;
+      }
+      
+      debugPrint('提取到 Bark token: $token');
+      
+      // 获取设备信息
+      final deviceInfo = await _getDeviceInfo();
+      
+      // 获取 JWT token
+      final authService = Get.find<AuthService>();
+      final jwtToken = authService.token.value;
+      
+      if (jwtToken.isEmpty) {
+        debugPrint('JWT token 为空，无法发送请求');
+        return;
+      }
+      
+      // 发送请求到后端
+      final apiUrl = Uri.parse('${Endpoints.baseUrl}${Endpoints.addBarkToken}');
+      final response = await http.post(
+        apiUrl,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $jwtToken',
+        },
+        body: jsonEncode({
+          'token': token,
+          'device': deviceInfo,
+        }),
+      );
+      
+      if (response.statusCode == 200) {
+        debugPrint('Bark token 发送成功: ${response.body}');
+        TDToast.showText('Bark 配置已保存', context: context);
+      } else {
+        debugPrint('Bark token 发送失败: ${response.statusCode} - ${response.body}');
+      }
+    } catch (e) {
+      debugPrint('发送 Bark token 失败: $e');
+    }
+  }
+  
+  /// 获取设备信息
+  Future<String> _getDeviceInfo() async {
+    try {
+      if (Platform.isIOS) {
+        return 'iPhone';
+      } else if (Platform.isAndroid) {
+        return 'Android';
+      } else {
+        return 'Unknown Device';
+      }
+    } catch (e) {
+      return 'Unknown Device';
+    }
   }
 }
