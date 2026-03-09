@@ -18,7 +18,7 @@ class ReminderPage extends StatefulWidget {
 class _ReminderPageState extends State<ReminderPage> {
   final SettingService settingService = Get.find<SettingService>();
   
-  final TextEditingController _deviceIdController = TextEditingController(text: 'ESP32_001');
+  final TextEditingController _deviceIdController = TextEditingController(text: 'esp32_001');
   late double _distanceMin;
   late int _alertSeconds;
   late bool _isActive;

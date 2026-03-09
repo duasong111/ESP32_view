@@ -152,6 +152,7 @@ class _EnvironmentPageState extends State<EnvironmentPage> {
                                 _alertEnabled = value;
                               });
                               settingService.setTemperatureAlertEnabled(value);
+                              _uploadThreshold();
                             },
                             activeColor: TDTheme.of(context).brandColor8,
                           ),
@@ -349,11 +350,12 @@ class _EnvironmentPageState extends State<EnvironmentPage> {
         },
         body: jsonEncode({
           'device_id': 'esp32_001',
-          'temp_max': _temperatureMax,
           'temp_min': _temperatureMin,
-          'humidity_max': _humidityMax,
+          'temp_max': _temperatureMax,
           'humidity_min': _humidityMin,
+          'humidity_max': _humidityMax,
           'alert_seconds': _alertSeconds,
+          'is_active': _alertEnabled,
         }),
       );
       
