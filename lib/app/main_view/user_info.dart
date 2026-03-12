@@ -4,6 +4,9 @@ import 'package:get/get.dart';
 import '../../shared/widgets/func_lists.dart';
 import '../api/services/auth_service.dart';
 import 'userinfo/setting.dart';
+import 'userinfo/my_profile.dart';
+import 'userinfo/my_profile.dart';
+
 class MyView extends StatefulWidget {
   const MyView({super.key});
 
@@ -13,7 +16,7 @@ class MyView extends StatefulWidget {
 
 class _MyViewState extends State<MyView> {
   // 构建填充按钮
-  TDButton _buildLightFillButton(BuildContext context, String text) {
+  TDButton _buildLightFillButton(BuildContext context, String text, VoidCallback? onTap) {
     return TDButton(
       text: text,
       size: TDButtonSize.medium,
@@ -21,7 +24,7 @@ class _MyViewState extends State<MyView> {
       shape: TDButtonShape.rectangle,
       theme: TDButtonTheme.light,
       width: 100,
-      onTap: () {},
+      onTap: onTap,
     );
   }
 
@@ -54,9 +57,11 @@ class _MyViewState extends State<MyView> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.end, 
               children: [
-                _buildLightFillButton(context, '修改资料'),
+                _buildLightFillButton(context, '修改资料', () {
+                  Get.to(() => const MyProfilePage());
+                }),
                 const SizedBox(height: 12), 
-                _buildLightFillButton(context, '查看主页'),
+                _buildLightFillButton(context, '查看主页', () {}),
               ],
             ),
           ],

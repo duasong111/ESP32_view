@@ -61,7 +61,7 @@ class _SettingViewState extends State<SettingView> {
           _buildSettingCard(
             children: [
               _buildSwitchTile(
-                title: '启用温度提醒',
+                title: '启用温度日志',
                 subtitle: '当温度超过阈值时显示提醒消息',
                 value: _temperatureAlertEnabled,
                 onChanged: (value) {

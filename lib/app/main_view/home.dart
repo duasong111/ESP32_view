@@ -17,7 +17,7 @@ class HomeView extends StatefulWidget {
 }
 
 class _HomeViewState extends State<HomeView> {
-  bool lightOn = true;
+  bool lightOn = false;
   bool fanOn = false;
   bool otherSwitchOn = false;
   bool buzzerOn = false;

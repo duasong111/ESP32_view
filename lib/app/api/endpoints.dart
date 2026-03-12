@@ -19,6 +19,8 @@ class Endpoints {
   // 认证模块
   static const String login = '/api/login'; // 用户登录
   static const String register = '/api/register';  // 用户注册信息
+  static const String getUserInfo = '/api/user/info';  // 获取用户信息
+  static const String updateUserInfo = '/api/update';  // 更新用户信息
 
   // WebSocket 模块
   static String get wsBaseUrl => baseUrl.replaceFirst('http://', 'ws://');

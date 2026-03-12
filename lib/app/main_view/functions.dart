@@ -34,28 +34,30 @@ class _ContactViewState extends State<ContactView> {
             width: 1,
           ),
         ),
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(12),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 40, color: color),
-            const SizedBox(height: 12),
+            Icon(icon, size: 36, color: color),
+            const SizedBox(height: 8),
             Text(
               title,
               style: TextStyle(
-                fontSize: 16,
+                fontSize: 15,
                 fontWeight: FontWeight.bold,
                 color: color,
               ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 4),
             Text(
               desc,
               textAlign: TextAlign.center,
               style: TextStyle(
-                fontSize: 12,
+                fontSize: 11,
                 color: color.withOpacity(0.7),
               ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
@@ -87,9 +89,11 @@ class _ContactViewState extends State<ContactView> {
             Expanded(
               child: GridView.count(
                 crossAxisCount: 2,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-                childAspectRatio: 1.2,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                childAspectRatio: 1.3,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
                 children: [
                   buildCard(
                     "环境监测",
@@ -106,8 +110,8 @@ class _ContactViewState extends State<ContactView> {
                     Colors.green,
                   ),
                   buildCard(
-                    "互动模式",
-                    "声控 + 灯效",
+                    "设备自检",
+                    "全部 检修",
                     Icons.touch_app,
                     const InteractionPage(),
                     const Color.fromARGB(255, 108, 152, 215),
