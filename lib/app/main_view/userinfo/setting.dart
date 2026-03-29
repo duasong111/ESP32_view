@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -18,23 +19,29 @@ class SettingView extends StatefulWidget {
 
 class _SettingViewState extends State<SettingView> {
   final SettingService _settingService = Get.find<SettingService>();
-    
+  
+  // 状态变量
   late bool _temperatureAlertEnabled;
   late double _temperatureThreshold;
-  late bool _distanceAlertEnabled;
-  late double _distanceThreshold;
   late String _notificationType;
   late String _notificationUrl;
+  
   final TextEditingController _urlController = TextEditingController();
   bool _isNotificationExpanded = false;
+  
+  // 设备绑定 Controller (建议在弹窗时初始化，这里为了保持逻辑延续放在 state)
+  final TextEditingController _deviceIdController = TextEditingController(text: 'esp32_001');
+  final TextEditingController _activationCodeController = TextEditingController();
+  final TextEditingController _deviceNameController = TextEditingController(text: 'esp32_001');
+
+  // 防抖计时器
+  Timer? _debounceTimer;
 
   @override
   void initState() {
     super.initState();
     _temperatureAlertEnabled = _settingService.temperatureAlertEnabled;
     _temperatureThreshold = _settingService.temperatureThreshold;
-    _distanceAlertEnabled = _settingService.distanceAlertEnabled;
-    _distanceThreshold = _settingService.distanceThreshold;
     _notificationType = _settingService.notificationType;
     _notificationUrl = _settingService.notificationUrl;
     _urlController.text = _notificationUrl;
@@ -43,31 +50,170 @@ class _SettingViewState extends State<SettingView> {
   
   @override
   void dispose() {
+    _debounceTimer?.cancel();
     _urlController.dispose();
+    _deviceIdController.dispose();
+    _activationCodeController.dispose();
+    _deviceNameController.dispose();
     super.dispose();
   }
+
+  // --- 逻辑处理方法 ---
+
+  /// 带有防抖功能的 URL 保存
+  void _onUrlChanged(String value) {
+    if (_debounceTimer?.isActive ?? false) _debounceTimer!.cancel();
+    
+    _debounceTimer = Timer(const Duration(milliseconds: 800), () {
+      _notificationUrl = value;
+      _settingService.setNotificationUrl(value);
+      
+      // 如果是 Bark 且 URL 有效，尝试同步 Token
+      if (_notificationType == 'bark' && value.contains('http')) {
+        _sendBarkToken(value);
+      }
+    });
+  }
+
+  /// 发送 Bark Token 到后端
+  Future<void> _sendBarkToken(String url) async {
+    try {
+      final uri = Uri.tryParse(url);
+      if (uri == null || uri.pathSegments.isEmpty) return;
+      
+      final token = uri.pathSegments.first;
+      final authService = Get.find<AuthService>();
+      final jwtToken = authService.token.value;
+      
+      if (jwtToken.isEmpty) return;
+
+      final apiUrl = Uri.parse('${Endpoints.baseUrl}${Endpoints.addBarkToken}');
+      final response = await http.post(
+        apiUrl,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $jwtToken',
+        },
+        body: jsonEncode({
+          'token': token,
+          'device': Platform.isIOS ? 'iPhone' : 'Android',
+        }),
+      );
+      
+      // 异步检查 mounted
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        TDToast.showText('Bark 配置已同步', context: context);
+      }
+    } catch (e) {
+      debugPrint('Bark Token Sync Error: $e');
+    }
+  }
+
+  /// 执行设备绑定
+  /// 绑定设备（带详细日志调试版）
+  Future<void> _bindDevice() async {
+    final deviceId = _deviceIdController.text.trim();
+    final activationCode = _activationCodeController.text.trim();
+    final deviceName = _deviceNameController.text.trim();
+    
+    if (deviceId.isEmpty || activationCode.isEmpty || deviceName.isEmpty) {
+      TDToast.showWarning('请填写完整信息', context: context);
+      return;
+    }
+
+    TDToast.showLoading(context: context);
+
+    try {
+      final authService = Get.find<AuthService>();
+      final String jwtToken = authService.token.value;
+      final String fullUrl = '${Endpoints.baseUrl}${Endpoints.deviceBind}';
+      
+      // --- 关键修改：构建 Headers 并打印日志 ---
+      final Map<String, String> headers = {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $jwtToken',
+      };
+
+      // 打印详细日志到控制台
+      debugPrint('==== [HTTP Request Debug] ====');
+      debugPrint('URL: $fullUrl');
+      debugPrint('Headers: ${jsonEncode(headers)}'); // 这里会完整显示你的 Token
+      debugPrint('Body: ${jsonEncode({
+        'device_id': deviceId,
+        'activation_code': activationCode,
+        'device_name': deviceName,
+      })}');
+      debugPrint('==============================');
+
+      final response = await http.post(
+        Uri.parse(fullUrl),
+        headers: headers,
+        body: jsonEncode({
+          'device_id': deviceId,
+          'activation_code': activationCode,
+          'device_name': deviceName,
+        }),
+      );
+
+      // 打印响应日志
+      debugPrint('Response Status: ${response.statusCode}');
+      debugPrint('Response Body: ${response.body}');
+
+      if (!mounted) return;
+      TDToast.dismissLoading(); // 手动关闭 Loading
+
+      if (response.statusCode == 200) {
+        final res = jsonDecode(response.body);
+        if (res['success'] == true) {
+          // 将设备添加到 AuthService
+          final device = Device(
+            deviceId: deviceId,
+            deviceName: deviceName,
+            activationCode: activationCode,
+            boundAt: DateTime.now(),
+          );
+          await authService.addDevice(device);
+          
+          Get.back();
+          TDToast.showSuccess('设备绑定成功', context: context);
+        } else {
+          TDToast.showText(res['message'] ?? '绑定失败', context: context);
+        }
+      } else if (response.statusCode == 401) {
+        TDToast.showWarning('登录失效，请重新登录', context: context);
+      } else {
+        TDToast.showText('服务器错误: ${response.statusCode}', context: context);
+      }
+    } catch (e) {
+      debugPrint('Request Exception: $e');
+      if (mounted) {
+        TDToast.dismissLoading();
+        TDToast.showText('网络连接异常', context: context);
+      }
+    }
+  }
+
+  // --- UI 构建方法 ---
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: const TDNavBar(
-        title: '设置',
-      ),
+      backgroundColor: TDTheme.of(context).grayColor1,
+      appBar: const TDNavBar(title: '设置'),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // 温度提醒设置
           _buildSectionHeader('温度提醒'),
           _buildSettingCard(
             children: [
               _buildSwitchTile(
-                title: '启用温度日志',
-                subtitle: '当温度超过阈值时显示提醒消息',
+                title: '启用温度提醒',
+                subtitle: '超出阈值时发送通知',
                 value: _temperatureAlertEnabled,
                 onChanged: (value) {
-                  setState(() {
-                    _temperatureAlertEnabled = value;
-                  });
+                  setState(() => _temperatureAlertEnabled = value);
                   _settingService.setTemperatureAlertEnabled(value);
                 },
               ),
@@ -78,16 +224,9 @@ class _SettingViewState extends State<SettingView> {
                   value: _temperatureThreshold,
                   min: 0,
                   max: 50,
-                  divisions: 50,
                   unit: '℃',
-                  onChanged: (value) {
-                    setState(() {
-                      _temperatureThreshold = value;
-                    });
-                  },
-                  onChangeEnd: (value) {
-                    _settingService.setTemperatureThreshold(value);
-                  },
+                  onChanged: (value) => setState(() => _temperatureThreshold = value),
+                  onChangeEnd: (value) => _settingService.setTemperatureThreshold(value),
                 ),
               ],
             ],
@@ -95,331 +234,145 @@ class _SettingViewState extends State<SettingView> {
           
           const SizedBox(height: 24),
           
-          // 自定义通知设置
           _buildSectionHeader('自定义通知'),
-          Card(
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                ListTile(
-                  title: const Text(
-                    '通知设置',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  subtitle: Text(
-                    _getNotificationSubtitle(),
-                    style: const TextStyle(fontSize: 12, color: Colors.grey),
-                  ),
-                  leading: Icon(
-                    Icons.notifications_active_outlined,
-                    color: TDTheme.of(context).brandColor8,
-                  ),
-                  trailing: Icon(
-                    _isNotificationExpanded 
-                        ? Icons.expand_less 
-                        : Icons.expand_more,
-                  ),
-                  onTap: () {
-                    setState(() {
-                      _isNotificationExpanded = !_isNotificationExpanded;
-                    });
-                  },
-                ),
-                if (_isNotificationExpanded) ...[
-                  const TDDivider(),
-                  _buildRadioTile(
-                    title: '钉钉机器人',
-                    subtitle: '通过钉钉机器人发送通知',
-                    value: 'dingtalk',
-                    groupValue: _notificationType,
-                    onChanged: (value) {
-                      setState(() {
-                        _notificationType = value!;
-                        _notificationUrl = _settingService.notificationUrl;
-                        _urlController.text = _notificationUrl;
-                      });
-                      _settingService.setNotificationType(value!);
-                    },
-                  ),
-                  const TDDivider(),
-                  _buildRadioTile(
-                    title: 'Bark 提醒',
-                    subtitle: '通过 Bark 推送通知',
-                    value: 'bark',
-                    groupValue: _notificationType,
-                    onChanged: (value) {
-                      setState(() {
-                        _notificationType = value!;
-                        _notificationUrl = _settingService.notificationUrl;
-                        _urlController.text = _notificationUrl;
-                      });
-                      _settingService.setNotificationType(value!);
-                    },
-                  ),
-                  const TDDivider(),
-                  _buildRadioTile(
-                    title: '不通知',
-                    subtitle: '关闭自定义通知',
-                    value: 'none',
-                    groupValue: _notificationType,
-                    onChanged: (value) {
-                      setState(() {
-                        _notificationType = value!;
-                      });
-                      _settingService.setNotificationType(value!);
-                    },
-                  ),
-                  if (_notificationType != 'none') ...[
-                    const TDDivider(),
-                    _buildUrlInput(),
-                  ],
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-  
-  String _getNotificationSubtitle() {
-    switch (_notificationType) {
-      case 'dingtalk':
-        return '已启用钉钉机器人';
-      case 'bark':
-        return '已启用 Bark 提醒';
-      default:
-        return '未启用自定义通知';
-    }
-  }
-  
-  Widget _buildSectionHeader(String title) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Text(
-        title,
-        style: const TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-    );
-  }
-  
-  Widget _buildSettingCard({required List<Widget> children}) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        children: children,
-      ),
-    );
-  }
-  
-  Widget _buildSwitchTile({
-    required String title,
-    required String subtitle,
-    required bool value,
-    required ValueChanged<bool> onChanged,
-  }) {
-    return SwitchListTile(
-      title: Text(title),
-      subtitle: Text(
-        subtitle,
-        style: const TextStyle(fontSize: 12, color: Colors.grey),
-      ),
-      value: value,
-      onChanged: onChanged,
-      activeColor: TDTheme.of(context).brandColor8,
-    );
-  }
-  
-  Widget _buildSliderTile({
-    required String title,
-    required double value,
-    required double min,
-    required double max,
-    required int divisions,
-    required String unit,
-    required ValueChanged<double> onChanged,
-    required ValueChanged<double> onChangeEnd,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          _buildSettingCard(
             children: [
-              Text(title),
-              Text(
-                '${value.toStringAsFixed(1)} $unit',
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.blue,
-                ),
+              ListTile(
+                leading: Icon(Icons.notifications_active_outlined, color: TDTheme.of(context).brandColor8),
+                title: const Text('通知方式', style: TextStyle(fontWeight: FontWeight.w500)),
+                subtitle: Text(_getNotificationSubtitle()),
+                trailing: Icon(_isNotificationExpanded ? Icons.expand_less : Icons.expand_more),
+                onTap: () => setState(() => _isNotificationExpanded = !_isNotificationExpanded),
+              ),
+              if (_isNotificationExpanded) ...[
+                const TDDivider(),
+                _buildRadioTile('钉钉机器人', 'dingtalk'),
+                const TDDivider(),
+                _buildRadioTile('Bark 提醒', 'bark'),
+                const TDDivider(),
+                _buildRadioTile('不通知', 'none'),
+                if (_notificationType != 'none') _buildUrlInput(),
+              ],
+            ],
+          ),
+          
+          const SizedBox(height: 24),
+          
+          _buildSectionHeader('硬件管理'),
+          _buildSettingCard(
+            children: [
+              ListTile(
+                leading: Icon(Icons.link, color: TDTheme.of(context).brandColor8),
+                title: const Text('绑定新设备'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: _showDeviceBindDialog,
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          Slider(
-            value: value,
-            min: min,
-            max: max,
-            divisions: divisions,
-            onChanged: onChanged,
-            onChangeEnd: onChangeEnd,
-            activeColor: TDTheme.of(context).brandColor8,
-          ),
         ],
       ),
     );
   }
-  
-  Widget _buildRadioTile({
-    required String title,
-    required String subtitle,
-    required String value,
-    required String groupValue,
-    required ValueChanged<String?> onChanged,
-  }) {
-    return RadioListTile<String>(
-      title: Text(title),
-      subtitle: Text(
-        subtitle,
-        style: const TextStyle(fontSize: 12, color: Colors.grey),
+
+
+  Widget _buildSectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, bottom: 8),
+      child: Text(title, style: const TextStyle(fontSize: 14, color: Colors.grey, fontWeight: FontWeight.bold)),
+    );
+  }
+
+  Widget _buildSettingCard({required List<Widget> children}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
       ),
+      child: Column(children: children),
+    );
+  }
+
+  Widget _buildSwitchTile({required String title, required String subtitle, required bool value, required ValueChanged<bool> onChanged}) {
+    return SwitchListTile(
+      title: Text(title),
+      subtitle: Text(subtitle, style: const TextStyle(fontSize: 12)),
       value: value,
-      groupValue: groupValue,
       onChanged: onChanged,
       activeColor: TDTheme.of(context).brandColor8,
     );
   }
-  
-  Widget _buildUrlInput() {
+
+  Widget _buildSliderTile({required String title, required double value, required double min, required double max, required String unit, required ValueChanged<double> onChanged, required ValueChanged<double> onChangeEnd}) {
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            _notificationType == 'dingtalk' ? '钉钉机器人 Webhook URL' : 'Bark 推送 URL',
-            style: const TextStyle(fontSize: 14),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [Text(title), Text('${value.toStringAsFixed(1)} $unit', style: TextStyle(color: TDTheme.of(context).brandColor8, fontWeight: FontWeight.bold))],
           ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _urlController,
-            autofocus: false,
-            decoration: InputDecoration(
-              hintText: _notificationType == 'dingtalk' 
-                  ? 'https://oapi.dingtalk.com/robot/send?access_token=...'
-                  : 'https://api.day.app/YOUR_KEY/',
-              border: const OutlineInputBorder(),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            ),
-            onChanged: (value) {
-              _notificationUrl = value;
-              _settingService.setNotificationUrl(value);
-              
-              // 如果是 Bark URL，自动提取并发送 token
-              if (_notificationType == 'bark' && value.isNotEmpty) {
-                _sendBarkToken(value);
-              }
-            },
-            textInputAction: TextInputAction.done,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            _notificationType == 'dingtalk' 
-                ? '请在钉钉群设置中获取机器人 Webhook 地址'
-                : '请在 Bark 应用中获取推送 URL',
-            style: const TextStyle(fontSize: 11, color: Colors.grey),
-          ),
+          Slider(value: value, min: min, max: max, divisions: max.toInt(), onChanged: onChanged, onChangeEnd: onChangeEnd, activeColor: TDTheme.of(context).brandColor8),
         ],
       ),
     );
   }
-  
-  /// 从 Bark URL 中提取 token 并发送到后端
-  Future<void> _sendBarkToken(String url) async {
-    try {
-      // 解析 URL 获取 token
-      final uri = Uri.parse(url);
-      final pathSegments = uri.pathSegments;
-      
-      if (pathSegments.isEmpty) {
-        debugPrint('Bark URL 格式不正确');
-        return;
-      }
-      
-      final token = pathSegments.first;
-      
-      if (token.isEmpty) {
-        debugPrint('无法从 URL 中提取 token');
-        return;
-      }
-      
-      debugPrint('提取到 Bark token: $token');
-      
-      // 获取设备信息
-      final deviceInfo = await _getDeviceInfo();
-      
-      // 获取 JWT token
-      final authService = Get.find<AuthService>();
-      final jwtToken = authService.token.value;
-      
-      if (jwtToken.isEmpty) {
-        debugPrint('JWT token 为空，无法发送请求');
-        return;
-      }
-      
-      // 发送请求到后端
-      final apiUrl = Uri.parse('${Endpoints.baseUrl}${Endpoints.addBarkToken}');
-      final response = await http.post(
-        apiUrl,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $jwtToken',
-        },
-        body: jsonEncode({
-          'token': token,
-          'device': deviceInfo,
-        }),
-      );
-      
-      if (response.statusCode == 200) {
-        debugPrint('Bark token 发送成功: ${response.body}');
-        TDToast.showText('Bark 配置已保存', context: context);
-      } else {
-        debugPrint('Bark token 发送失败: ${response.statusCode} - ${response.body}');
-      }
-    } catch (e) {
-      debugPrint('发送 Bark token 失败: $e');
-    }
+
+  Widget _buildRadioTile(String title, String value) {
+    return RadioListTile<String>(
+      title: Text(title),
+      value: value,
+      groupValue: _notificationType,
+      activeColor: TDTheme.of(context).brandColor8,
+      onChanged: (val) {
+        if (val == null) return;
+        setState(() {
+          _notificationType = val;
+          _urlController.text = _settingService.notificationUrl;
+        });
+        _settingService.setNotificationType(val);
+      },
+    );
   }
-  
-  /// 获取设备信息
-  Future<String> _getDeviceInfo() async {
-    try {
-      if (Platform.isIOS) {
-        return 'iPhone';
-      } else if (Platform.isAndroid) {
-        return 'Android';
-      } else {
-        return 'Unknown Device';
-      }
-    } catch (e) {
-      return 'Unknown Device';
-    }
+
+  Widget _buildUrlInput() {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: TextField(
+        controller: _urlController,
+        decoration: InputDecoration(
+          labelText: _notificationType == 'dingtalk' ? 'Webhook URL' : 'Bark URL',
+          hintText: '请输入完整的 URL 地址',
+          border: const OutlineInputBorder(),
+        ),
+        onChanged: _onUrlChanged,
+      ),
+    );
+  }
+
+  String _getNotificationSubtitle() {
+    if (_notificationType == 'dingtalk') return '钉钉机器人';
+    if (_notificationType == 'bark') return 'Bark 推送';
+    return '已禁用';
+  }
+
+  void _showDeviceBindDialog() {
+    Get.defaultDialog(
+      title: '设备绑定',
+      content: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8.0),
+        child: Column(
+          children: [
+            TextField(controller: _deviceIdController, decoration: const InputDecoration(labelText: '设备 ID')),
+            TextField(controller: _activationCodeController, decoration: const InputDecoration(labelText: '激活码')),
+            TextField(controller: _deviceNameController, decoration: const InputDecoration(labelText: '备注名称')),
+          ],
+        ),
+      ),
+      textConfirm: '开始绑定',
+      textCancel: '取消',
+      confirmTextColor: Colors.white,
+      buttonColor: TDTheme.of(context).brandColor8,
+      onConfirm: _bindDevice,
+    );
   }
 }

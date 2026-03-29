@@ -55,6 +55,40 @@ class User {
   }
 }
 
+class Device {
+  final String deviceId;
+  final String deviceName;
+  final String activationCode;
+  final DateTime? boundAt;
+
+  Device({
+    required this.deviceId,
+    required this.deviceName,
+    required this.activationCode,
+    this.boundAt,
+  });
+
+  factory Device.fromJson(Map<String, dynamic> json) {
+    return Device(
+      deviceId: json['device_id'] as String,
+      deviceName: json['device_name'] as String,
+      activationCode: json['activation_code'] as String,
+      boundAt: json['bound_at'] != null 
+          ? DateTime.parse(json['bound_at'] as String)
+          : null,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'device_id': deviceId,
+      'device_name': deviceName,
+      'activation_code': activationCode,
+      'bound_at': boundAt?.toIso8601String(),
+    };
+  }
+}
+
 class AuthService extends GetxService {
   final storage = FlutterSecureStorage();
 
@@ -62,6 +96,10 @@ class AuthService extends GetxService {
   final token = ''.obs;
   final currentUser = ''.obs;
   final Rx<User?> userInfo = Rx<User?>(null);
+  
+  // 设备管理
+  final RxList<Device> devices = <Device>[].obs;
+  final Rx<Device?> selectedDevice = Rx<Device?>(null);
 
   // 初始化方法
   Future<AuthService> init() async {
@@ -156,6 +194,72 @@ class AuthService extends GetxService {
   Future<void> updateUserInfo(User user) async {
     userInfo.value = user;
     await storage.write(key: 'user_info', value: jsonEncode(user.toJson()));
+  }
+  
+  /// 添加设备
+  Future<void> addDevice(Device device) async {
+    devices.add(device);
+    await _saveDevices();
+    
+    // 如果是第一个设备，自动选中
+    if (devices.length == 1) {
+      selectedDevice.value = device;
+    }
+  }
+  
+  /// 移除设备
+  Future<void> removeDevice(Device device) async {
+    devices.remove(device);
+    if (selectedDevice.value == device) {
+      selectedDevice.value = devices.isNotEmpty ? devices.first : null;
+    }
+    await _saveDevices();
+  }
+  
+  /// 选择设备
+  void selectDevice(Device device) {
+    selectedDevice.value = device;
+  }
+  
+  /// 保存设备列表
+  Future<void> _saveDevices() async {
+    final devicesJson = jsonEncode(devices.map((d) => d.toJson()).toList());
+    await storage.write(key: 'bound_devices', value: devicesJson);
+    if (selectedDevice.value != null) {
+      await storage.write(key: 'selected_device', value: selectedDevice.value!.deviceId);
+    }
+  }
+  
+  /// 加载设备列表
+  Future<void> loadDevices() async {
+    try {
+      final devicesJson = await storage.read(key: 'bound_devices');
+      final selectedDeviceId = await storage.read(key: 'selected_device');
+      
+      if (devicesJson != null && devicesJson.isNotEmpty) {
+        final devicesList = jsonDecode(devicesJson) as List;
+        devices.value = devicesList.map((d) => Device.fromJson(d as Map<String, dynamic>)).toList();
+        
+        // 恢复选中的设备
+        if (selectedDeviceId != null) {
+          final device = devices.firstWhereOrNull((d) => d.deviceId == selectedDeviceId);
+          if (device != null) {
+            selectedDevice.value = device;
+          } else if (devices.isNotEmpty) {
+            selectedDevice.value = devices.first;
+          }
+        } else if (devices.isNotEmpty) {
+          selectedDevice.value = devices.first;
+        }
+      }
+    } catch (e) {
+      debugPrint('加载设备列表失败: $e');
+    }
+  }
+  
+  /// 获取当前选中的设备 ID
+  String get currentDeviceId {
+    return selectedDevice.value?.deviceId ?? 'esp32_001';
   }
 
   // 登出方法

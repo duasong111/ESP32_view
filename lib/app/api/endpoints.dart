@@ -3,7 +3,7 @@ class Endpoints {
   // 不同环境的基地址
   static const String _devAndroid = 'http://10.0.2.2:8000';
   static const String _devIOS = 'http://127.0.0.1:8000';
-  static const String _devRealDevice = 'http://192.168.18.215:8000';  // 改成你局域网IP
+  static const String _devRealDevice = 'http://192.168.18.198:8000';  // 改成你局域网IP
   static const String _prod = 'https://api.yourdomain.com';
 
   // 关键：增加一个可手动切换的标志（调试超级方便）
@@ -32,4 +32,10 @@ class Endpoints {
   static const String setBarkThreshold = '/api/device/accept_threshold';  // 设置温湿度发阈值
   static const String setDistanceThreshold = '/api/device/distance_threshold';  // 设置距离预警
   static const String controlSelfThreshold = '/api/device/control_self';  // 控制自己的阈值
-}
+  static const String deviceBind = '/api/device/bind';  // 绑定设备
+  static const String deviceUnbind = '/api/device/unbind';  // 解绑设备
+  static const String deviceControl = '/api/device/control';  // 控制设备
+  static const String notifications = '/api/notifications';  // 通知模块
+  static const String offlineConfig = '/api/device/offline_config';  // 下线配置模块
+  
+  }

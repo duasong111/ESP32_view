@@ -1,9 +1,11 @@
 import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import '../../api/endpoints.dart';
+import '../../api/services/auth_service.dart';
 
 class UploadImageCard extends StatefulWidget {
   final void Function(File image)? onImageSelected;
@@ -44,13 +46,23 @@ class _UploadImageCardState extends State<UploadImageCard> {
 
   Future<void> _sendTextToScreen() async {
     try {
+      final authService = Get.find<AuthService>();
+      final jwtToken = authService.token.value;
+      
+      if (jwtToken.isEmpty) {
+        debugPrint('JWT token 为空，无法发送文字');
+        return;
+      }
+
       final url = Uri.parse('${Endpoints.baseUrl}${Endpoints.modifyScreenText}');
       final response = await http.post(
         url,
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': 'Bearer $jwtToken',
         },
         body: jsonEncode({
+          'device_id': 'esp32_001',
           'type': 'text',
           'text': _textController.text,
           'duration': _duration,
@@ -60,6 +72,18 @@ class _UploadImageCardState extends State<UploadImageCard> {
           'background_color': _backgroundColor,
         }),
       );
+      
+      debugPrint('文字上传请求头: Authorization: Bearer ${jwtToken.substring(0, 20)}...');
+      debugPrint('文字上传请求体: ${jsonEncode({
+        'device_id': 'esp32_001',
+        'type': 'text',
+        'text': _textController.text,
+        'duration': _duration,
+        'scroll': _scroll,
+        'font_size': _fontSize,
+        'text_color': _textColor,
+        'background_color': _backgroundColor,
+      })}');
       debugPrint('文字上传响应: ${response.statusCode}');
       if (response.statusCode == 200) {
         debugPrint('文字上传成功: ${response.body}');

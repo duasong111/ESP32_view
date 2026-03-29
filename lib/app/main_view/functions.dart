@@ -118,9 +118,9 @@ class _ContactViewState extends State<ContactView> {
                   ),
                   buildCard(
                     "安防模式",
-                    "异常检测 + 报警",
+                    "上线 + 掉线通知",
                     Icons.security,
-                    const SecurityPage(),
+                    const SecurityModePage(),
                     const Color.fromARGB(255, 207, 88, 19),
                   ),
                 ],

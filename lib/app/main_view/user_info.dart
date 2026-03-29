@@ -5,7 +5,8 @@ import '../../shared/widgets/func_lists.dart';
 import '../api/services/auth_service.dart';
 import 'userinfo/setting.dart';
 import 'userinfo/my_profile.dart';
-import 'userinfo/my_profile.dart';
+import 'functions/notification_page.dart';
+import 'functions/security_mode_page.dart';
 
 class MyView extends StatefulWidget {
   const MyView({super.key});
@@ -103,10 +104,22 @@ class _MyViewState extends State<MyView> {
                         },
                       ),
                       FunctionItem(
-                        title: '添加记录',
+                        title: '告警记录',
                         background: const Color.fromARGB(255, 240, 240, 240),
-                        textColor: const Color.fromARGB(255, 111, 151, 183),
+                        textColor: const Color.fromARGB(255, 71, 144, 226),
                         icon: TDIcons.adjustment,
+                        onTap: () {
+                          Get.to(const NotificationPage());
+                        },
+                      ),
+                      FunctionItem(
+                        title: '安防模式',
+                        background: const Color.fromARGB(255, 240, 240, 240),
+                        textColor: const Color.fromARGB(255, 71, 144, 226),
+                        icon: TDIcons.notification,
+                        onTap: () {
+                          Get.to(const SecurityModePage());
+                        },
                       ),
                       FunctionItem(
                         title: '退出登录',

@@ -9,6 +9,8 @@ import '../../shared/widgets/iot_switch_card.dart';
 import '../main_view/home/upload_image_card.dart';
 import '../api/endpoints.dart';
 import '../api/services/setting_service.dart';
+import '../api/services/auth_service.dart' as auth;
+import '../main_view/functions/notification_page.dart';
 class HomeView extends StatefulWidget {
   const HomeView({super.key});
 
@@ -17,6 +19,8 @@ class HomeView extends StatefulWidget {
 }
 
 class _HomeViewState extends State<HomeView> {
+  final authService = Get.find<auth.AuthService>();
+  
   bool lightOn = false;
   bool fanOn = false;
   bool otherSwitchOn = false;
@@ -38,18 +42,37 @@ class _HomeViewState extends State<HomeView> {
   /// 发送 RGB 控制命令
   Future<void> _sendRgbControl(bool isOn) async {
     try {
+      final jwtToken = authService.token.value;
+      
+      if (jwtToken.isEmpty) {
+        debugPrint('JWT token 为空，无法发送控制命令');
+        TDToast.showWarning('请先登录', context: context);
+        return;
+      }
+
+      final deviceId = authService.currentDeviceId;
       final url = Uri.parse('${Endpoints.baseUrl}${Endpoints.rgbControl}');
       final response = await http.post(
         url,
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': 'Bearer $jwtToken',
         },
         body: jsonEncode({
+          'device_id': deviceId,
           'state': isOn ? 'on' : 'off',
           'color': selectedColor,
           'brightness': brightness,
         }),
       );
+      
+      debugPrint('RGB控制请求头: Authorization: Bearer ${jwtToken.substring(0, 20)}...');
+      debugPrint('RGB控制请求体: ${jsonEncode({
+        'device_id': deviceId,
+        'state': isOn ? 'on' : 'off',
+        'color': selectedColor,
+        'brightness': brightness,
+      })}');
       debugPrint('RGB控制响应: ${response.statusCode}');
       if (response.statusCode == 200) {
         debugPrint('控制成功: ${response.body}');
@@ -71,13 +94,24 @@ class _HomeViewState extends State<HomeView> {
   /// 发送蜂鸣器控制命令
   Future<void> _sendBuzzerControl(bool isOn) async {
     try {
+      final jwtToken = authService.token.value;
+      
+      if (jwtToken.isEmpty) {
+        debugPrint('JWT token 为空，无法发送控制命令');
+        TDToast.showWarning('请先登录', context: context);
+        return;
+      }
+
+      final deviceId = authService.currentDeviceId;
       final url = Uri.parse('${Endpoints.baseUrl}${Endpoints.buzzerControl}');
       final response = await http.post(
         url,
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': 'Bearer $jwtToken',
         },
         body: jsonEncode({
+          'device_id': deviceId,
           'type': 'buzzer',
           'state': isOn ? 'on' : 'off',
           'frequency': buzzerFrequency,
@@ -86,7 +120,7 @@ class _HomeViewState extends State<HomeView> {
           'cycles': buzzerCycles,
         }),
       );
-      debugPrint('蜂鸣器控制响应: ${response.statusCode}');
+      
       if (response.statusCode == 200) {
         debugPrint('控制成功: ${response.body}');
       } else {
@@ -222,68 +256,82 @@ class _HomeViewState extends State<HomeView> {
   /// 构建消息提醒卡片
   Widget _buildNoticeBar() {
     final size = MediaQuery.of(context).size;
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: TDNoticeBarStyle.generateTheme(context).backgroundColor,
-        borderRadius: const BorderRadius.all(Radius.circular(12)),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0d000000),
-            blurRadius: 8,
-            spreadRadius: 2,
-            offset: Offset(0, 2),
-          ),
-          BoxShadow(
-            color: Color(0x0f000000),
-            blurRadius: 10,
-            spreadRadius: 1,
-            offset: Offset(0, 8),
-          ),
-          BoxShadow(
-            color: Color(0x1a000000),
-            blurRadius: 5,
-            spreadRadius: -3,
-            offset: Offset(0, 5),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Container(
-            width: size.width - 32,
-            decoration: const BoxDecoration(
-              borderRadius: BorderRadius.all(Radius.circular(12)),
+    return GestureDetector(
+      onTap: () {
+        Get.to(const NotificationPage());
+      },
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          color: TDNoticeBarStyle.generateTheme(context).backgroundColor,
+          borderRadius: const BorderRadius.all(Radius.circular(12)),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x0d000000),
+              blurRadius: 8,
+              spreadRadius: 2,
+              offset: Offset(0, 2),
             ),
-            clipBehavior: Clip.hardEdge,
-            child: TDNoticeBar(
-              content: '温度超过15度提醒',
-              prefixIcon: TDIcons.error_circle_filled,
-              suffixIcon: TDIcons.chevron_right,
+            BoxShadow(
+              color: Color(0x0f000000),
+              blurRadius: 10,
+              spreadRadius: 1,
+              offset: Offset(0, 8),
             ),
-          ),
-          Container(
-            width: size.width - 32,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: TDTheme.of(context).bgColorContainer,
-              borderRadius: const BorderRadius.all(Radius.circular(12)),
+            BoxShadow(
+              color: Color(0x1a000000),
+              blurRadius: 5,
+              spreadRadius: -3,
+              offset: Offset(0, 5),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (var alert in _temperatureAlerts)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Text(
-                      alert,
-                      style: const TextStyle(fontSize: 13),
+          ],
+        ),
+        child: Column(
+          children: [
+            Container(
+              width: size.width - 32,
+              decoration: const BoxDecoration(
+                borderRadius: BorderRadius.all(Radius.circular(12)),
+              ),
+              clipBehavior: Clip.hardEdge,
+              child: TDNoticeBar(
+                content: '温度超过15度提醒',
+                prefixIcon: TDIcons.error_circle_filled,
+                suffixIcon: TDIcons.chevron_right,
+              ),
+            ),
+            Container(
+              width: size.width - 32,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: TDTheme.of(context).bgColorContainer,
+                borderRadius: const BorderRadius.all(Radius.circular(12)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (var alert in _temperatureAlerts)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(
+                        alert,
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                    ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '点击查看全部告警记录',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: TDTheme.of(context).brandNormalColor,
+                      decoration: TextDecoration.underline,
                     ),
                   ),
-              ],
-            ),
-          )
-        ],
+                ],
+              ),
+            )
+          ],
+        ),
       ),
     );
   }
