@@ -335,9 +335,16 @@ class _EnvironmentPageState extends State<EnvironmentPage> {
     try {
       final authService = Get.find<AuthService>();
       final jwtToken = authService.token.value;
+      final deviceId = authService.currentDeviceId;
       
       if (jwtToken.isEmpty) {
         debugPrint('JWT token 为空，无法上传阈值');
+        return;
+      }
+      
+      if (deviceId.isEmpty) {
+        debugPrint('设备ID为空，无法上传阈值');
+        TDToast.showText('请先绑定设备', context: context);
         return;
       }
       
@@ -349,13 +356,15 @@ class _EnvironmentPageState extends State<EnvironmentPage> {
           'Authorization': 'Bearer $jwtToken',
         },
         body: jsonEncode({
-          'device_id': 'esp32_001',
-          'temp_min': _temperatureMin,
-          'temp_max': _temperatureMax,
-          'humidity_min': _humidityMin,
+          'device_id': deviceId,
+          'temperature_max': _temperatureMax,
+          'temperature_min': _temperatureMin,
           'humidity_max': _humidityMax,
-          'alert_seconds': _alertSeconds,
+          'humidity_min': _humidityMin,
+          'alert_interval': _alertSeconds,
           'is_active': _alertEnabled,
+          'alert_action': 'buzzer',
+          'led_color': 'red',
         }),
       );
       

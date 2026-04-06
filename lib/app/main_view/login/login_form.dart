@@ -53,9 +53,17 @@ class _LoginFormState extends State<LoginForm> {
         }
         final authService = Get.find<AuthService>();
         final String username = _accountController.text.trim();
+        
+        // 处理设备列表
+        List<dynamic>? devicesData;
+        if (dataContent.containsKey('devices')) {
+          devicesData = dataContent['devices'] as List<dynamic>?;
+        }
+        
         await authService.setLogin(
           accessToken,
           username: username,
+          devicesData: devicesData,
         );
         TDToast.showText('登录成功！', context: context);
         Get.offAllNamed('/home');

@@ -59,12 +59,14 @@ class Device {
   final String deviceId;
   final String deviceName;
   final String activationCode;
+  final String? secretKey;
   final DateTime? boundAt;
 
   Device({
     required this.deviceId,
     required this.deviceName,
     required this.activationCode,
+    this.secretKey,
     this.boundAt,
   });
 
@@ -73,6 +75,7 @@ class Device {
       deviceId: json['device_id'] as String,
       deviceName: json['device_name'] as String,
       activationCode: json['activation_code'] as String,
+      secretKey: json['secret_key'] as String?,
       boundAt: json['bound_at'] != null 
           ? DateTime.parse(json['bound_at'] as String)
           : null,
@@ -84,6 +87,7 @@ class Device {
       'device_id': deviceId,
       'device_name': deviceName,
       'activation_code': activationCode,
+      'secret_key': secretKey,
       'bound_at': boundAt?.toIso8601String(),
     };
   }
@@ -129,6 +133,9 @@ class AuthService extends GetxService {
             debugPrint('解析用户信息失败: $e');
           }
         }
+        
+        // 加载设备列表
+        await loadDevices();
       } else {
         _clearLoginState();
       }
@@ -171,6 +178,7 @@ class AuthService extends GetxService {
     String accessToken, {
     String? username,
     User? user,
+    List<dynamic>? devicesData,
   }) async {
     // 保存 token
     await storage.write(key: 'access_token', value: accessToken);
@@ -187,6 +195,32 @@ class AuthService extends GetxService {
     if (user != null) {
       userInfo.value = user;
       await storage.write(key: 'user_info', value: jsonEncode(user.toJson()));
+    }
+    
+    // 处理设备列表
+    if (devicesData != null && devicesData.isNotEmpty) {
+      devices.clear();
+      for (var deviceData in devicesData) {
+        final device = Device(
+          deviceId: deviceData['device_id'] as String,
+          deviceName: deviceData['device_name'] as String,
+          activationCode: '', // 从登录响应中可能没有激活码
+          secretKey: deviceData['secret_key'] as String,
+          boundAt: deviceData['bound_at'] != null 
+              ? DateTime.parse(deviceData['bound_at'] as String)
+              : DateTime.now(),
+        );
+        devices.add(device);
+      }
+      // 自动选择第一个设备
+      if (devices.isNotEmpty) {
+        selectedDevice.value = devices.first;
+      }
+      // 保存设备列表
+      await _saveDevices();
+    } else {
+      // 加载本地设备列表
+      await loadDevices();
     }
   }
   
@@ -267,10 +301,14 @@ class AuthService extends GetxService {
     await storage.delete(key: 'access_token');
     await storage.delete(key: 'current_username');
     await storage.delete(key: 'user_info');
+    await storage.delete(key: 'bound_devices');
+    await storage.delete(key: 'selected_device');
 
     isLoggedIn.value = false;
     token.value = '';
     currentUser.value = '';
     userInfo.value = null;
+    devices.clear();
+    selectedDevice.value = null;
   }
 }

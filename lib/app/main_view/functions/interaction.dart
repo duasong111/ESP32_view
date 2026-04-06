@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:tdesign_flutter/tdesign_flutter.dart';
 import '../../api/endpoints.dart';
 import '../../api/services/auth_service.dart';
+import '../../api/services/setting_service.dart';
 
 class InteractionPage extends StatefulWidget {
   const InteractionPage({super.key});
@@ -16,7 +17,7 @@ class InteractionPage extends StatefulWidget {
 }
 
 class _InteractionPageState extends State<InteractionPage> {
-  String _deviceId = 'esp32_001';
+  String _deviceId = '';
   bool _isGlobalLoading = false; // 全局按钮加载状态
   
   // 蜂鸣器控制状态
@@ -31,6 +32,8 @@ class _InteractionPageState extends State<InteractionPage> {
   int _ledBrightness = 80;
   String _ledMode = 'blink';
   
+  final SettingService settingService = Get.find<SettingService>();
+  
   final List<String> _colors = ['red', 'green', 'blue', 'yellow', 'purple', 'white'];
   final List<String> _modes = ['static', 'blink', 'fade'];
 
@@ -40,6 +43,21 @@ class _InteractionPageState extends State<InteractionPage> {
   @override
   void initState() {
     super.initState();
+    _loadBoundDevices();
+    _loadSavedState();
+  }
+  
+  /// 加载保存的状态
+  void _loadSavedState() {
+    setState(() {
+      _buzzerOn = settingService.buzzerOn;
+      _ledOn = settingService.ledOn;
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
     _loadBoundDevices();
   }
 
@@ -51,10 +69,17 @@ class _InteractionPageState extends State<InteractionPage> {
 
   /// 加载绑定的设备
   Future<void> _loadBoundDevices() async {
-    // 逻辑保持不变，实际建议调用 API
-    setState(() {
-      _deviceId = 'esp32_001'; 
-    });
+    try {
+      final authService = Get.find<AuthService>();
+      final deviceId = authService.currentDeviceId;
+      if (deviceId.isNotEmpty) {
+        setState(() {
+          _deviceId = deviceId;
+        });
+      }
+    } catch (e) {
+      debugPrint('加载设备信息失败: $e');
+    }
   }
 
   /// 统一的防抖发送入口
@@ -117,6 +142,7 @@ class _InteractionPageState extends State<InteractionPage> {
       value: _buzzerOn,
       onChanged: (val) {
         setState(() => _buzzerOn = val);
+        settingService.setBuzzerOn(val);
         _handleControlUpdate(immediate: true);
       },
       children: _buzzerOn ? [
@@ -153,6 +179,7 @@ class _InteractionPageState extends State<InteractionPage> {
       value: _ledOn,
       onChanged: (val) {
         setState(() => _ledOn = val);
+        settingService.setLedOn(val);
         _handleControlUpdate(immediate: true);
       },
       children: _ledOn ? [
@@ -201,6 +228,8 @@ class _InteractionPageState extends State<InteractionPage> {
               theme: TDButtonTheme.primary,
               onTap: () async {
                 setState(() { _buzzerOn = true; _ledOn = true; });
+                settingService.setBuzzerOn(true);
+                settingService.setLedOn(true);
                 await _sendControlCommand();
               },
             ),
@@ -212,6 +241,8 @@ class _InteractionPageState extends State<InteractionPage> {
               theme: TDButtonTheme.danger,
               onTap: () async {
                 setState(() { _buzzerOn = false; _ledOn = false; });
+                settingService.setBuzzerOn(false);
+                settingService.setLedOn(false);
                 await _sendControlCommand();
               },
             ),
@@ -308,6 +339,12 @@ class _InteractionPageState extends State<InteractionPage> {
   try {
     final authService = Get.find<AuthService>();
     final String jwtToken = authService.token.value;
+    final String deviceId = authService.currentDeviceId;
+
+    if (deviceId.isEmpty) {
+      TDToast.showText('请先绑定设备', context: context);
+      return;
+    }
 
     // --- 准备请求数据 ---
     final String apiUrl = '${Endpoints.baseUrl}${Endpoints.controlSelfThreshold}';
@@ -318,7 +355,7 @@ class _InteractionPageState extends State<InteractionPage> {
     };
 
     final Map<String, dynamic> body = {
-      'device_id': _deviceId,
+      'device_id': deviceId,
       'controls': [
         {
           'type': 'buzzer',

@@ -18,10 +18,10 @@ class ReminderPage extends StatefulWidget {
 class _ReminderPageState extends State<ReminderPage> {
   final SettingService settingService = Get.find<SettingService>();
   
-  final TextEditingController _deviceIdController = TextEditingController(text: 'esp32_001');
   late double _distanceMin;
   late int _alertSeconds;
   late bool _isActive;
+  String _deviceId = '';
   
   @override
   void initState() {
@@ -29,11 +29,32 @@ class _ReminderPageState extends State<ReminderPage> {
     _isActive = settingService.distanceAlertEnabled;
     _distanceMin = settingService.distanceThreshold;
     _alertSeconds = 300; // 默认预警间隔 300秒
+    _loadDeviceId();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _loadDeviceId();
+  }
+
+  void _loadDeviceId() {
+    try {
+      final authService = Get.find<AuthService>();
+      final deviceId = authService.currentDeviceId;
+      if (deviceId.isNotEmpty) {
+        setState(() {
+          _deviceId = deviceId;
+        });
+      }
+    } catch (e) {
+      debugPrint('加载设备信息失败: $e');
+    }
   }
   
   @override
   void dispose() {
-    _deviceIdController.dispose();
+    // 无需dispose任何controller，因为_deviceId是String类型，不是TextEditingController
     super.dispose();
   }
 
@@ -78,18 +99,19 @@ class _ReminderPageState extends State<ReminderPage> {
                     if (_isActive) ...[
                       const SizedBox(height: 20),
                       
-                      // 设备编号输入
-                      TextField(
-                        controller: _deviceIdController,
-                        decoration: const InputDecoration(
-                          labelText: '设备编号',
-                          hintText: '例如: ESP32_001',
-                          border: OutlineInputBorder(),
-                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      // 设备编号显示
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey),
+                          borderRadius: BorderRadius.circular(8),
                         ),
-                        onChanged: (value) {
-                          // 可以在这里添加验证逻辑
-                        },
+                        child: Row(
+                          children: [
+                            const Text('当前设备: ', style: TextStyle(fontWeight: FontWeight.w500)),
+                            Text(_deviceId.isNotEmpty ? _deviceId : '未绑定设备'),
+                          ],
+                        ),
                       ),
                       
                       const SizedBox(height: 20),
@@ -208,9 +230,16 @@ class _ReminderPageState extends State<ReminderPage> {
     try {
       final authService = Get.find<AuthService>();
       final jwtToken = authService.token.value;
+      final deviceId = authService.currentDeviceId;
       
       if (jwtToken.isEmpty) {
         debugPrint('JWT token 为空，无法上传距离阈值');
+        return;
+      }
+      
+      if (deviceId.isEmpty) {
+        debugPrint('设备ID为空，无法上传距离阈值');
+        TDToast.showText('请先绑定设备', context: context);
         return;
       }
       
@@ -222,9 +251,9 @@ class _ReminderPageState extends State<ReminderPage> {
           'Authorization': 'Bearer $jwtToken',
         },
         body: jsonEncode({
-          'device_id': _deviceIdController.text.trim(),
+          'device_id': deviceId,
           'distance_min': _distanceMin,
-          'alert_seconds': _alertSeconds,
+          'alert_interval': _alertSeconds,
           'is_active': _isActive,
         }),
       );

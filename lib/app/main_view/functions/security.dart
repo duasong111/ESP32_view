@@ -31,6 +31,12 @@ class _SecurityModePageState extends State<SecurityModePage> {
     super.initState();
     _loadConfig();
   }
+  
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _loadConfig();
+  }
 
   /// 获取配置逻辑
   Future<void> _loadConfig() async {
@@ -41,7 +47,14 @@ class _SecurityModePageState extends State<SecurityModePage> {
         return;
       }
 
-      final url = Uri.parse('${Endpoints.baseUrl}${Endpoints.offlineConfig}');
+      final deviceId = authService.currentDeviceId;
+      if (deviceId.isEmpty) {
+        TDToast.showText('请先绑定设备', context: context);
+        if (mounted) setState(() => _isLoading = false);
+        return;
+      }
+
+      final url = Uri.parse('${Endpoints.baseUrl}${Endpoints.offlineConfig}?device_id=$deviceId');
       final response = await http.get(
         url,
         headers: {
@@ -54,9 +67,10 @@ class _SecurityModePageState extends State<SecurityModePage> {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        // 增加对 200 或业务 code 的判断
-        if (data['code'] == 200 || data['success'] == true) {
-          final config = data['data'] ?? {};
+        // 增加对 200 或业务 success 的判断
+        if (data['success'] == true) {
+          final responseData = data['data'] ?? {};
+          final config = responseData['config'] ?? {};
           setState(() {
             _isActive = config['is_active'] ?? false;
             _enableOnlineAlert = config['enable_online_alert'] ?? false;
@@ -65,11 +79,16 @@ class _SecurityModePageState extends State<SecurityModePage> {
             _alertInterval = config['alert_interval'] ?? 100;
             _isLoading = false;
           });
+        } else {
+          // 如果没有配置，使用默认值
+          if (mounted) setState(() => _isLoading = false);
         }
+      } else {
+        // 网络错误时使用默认值
+        if (mounted) setState(() => _isLoading = false);
       }
     } catch (e) {
       debugPrint('加载安防配置失败: $e');
-    } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }

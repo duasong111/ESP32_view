@@ -166,13 +166,14 @@ class _SettingViewState extends State<SettingView> {
 
       if (response.statusCode == 200) {
         final res = jsonDecode(response.body);
-        if (res['success'] == true) {
+        if (res['code'] == 200) {
+          final data = res['data'];
           // 将设备添加到 AuthService
           final device = Device(
-            deviceId: deviceId,
-            deviceName: deviceName,
+            deviceId: data['device_id'] as String,
+            deviceName: data['device_name'] as String,
             activationCode: activationCode,
-            boundAt: DateTime.now(),
+            boundAt: data['bound_at'] != null ? DateTime.parse(data['bound_at'] as String) : DateTime.now(),
           );
           await authService.addDevice(device);
           

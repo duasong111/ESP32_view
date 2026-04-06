@@ -82,11 +82,18 @@ class _RegisterFormState extends State<RegisterForm> {
           return;
         }
 
+        // 处理设备列表
+        List<dynamic>? devicesData;
+        if (dataContent.containsKey('devices')) {
+          devicesData = dataContent['devices'] as List<dynamic>?;
+        }
+
         // 更新 AuthService
         final authService = Get.find<AuthService>();
         await authService.setLogin(
           accessToken,
           username: username,
+          devicesData: devicesData,
         );
 
         TDToast.showText('注册成功，已自动登录', context: context);

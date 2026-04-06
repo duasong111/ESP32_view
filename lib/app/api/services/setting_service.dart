@@ -30,6 +30,13 @@ class SettingService extends GetxService {
   final _notificationUrl = ''.obs;
   String get notificationUrl => _notificationUrl.value;
   
+  // 设备自检状态
+  final _buzzerOn = false.obs;
+  bool get buzzerOn => _buzzerOn.value;
+  
+  final _ledOn = false.obs;
+  bool get ledOn => _ledOn.value;
+  
   @override
   void onInit() {
     super.onInit();
@@ -45,6 +52,8 @@ class SettingService extends GetxService {
       final distThreshold = await _storage.read(key: 'distance_threshold');
       final notificationType = await _storage.read(key: 'notification_type');
       final notificationUrl = await _storage.read(key: 'notification_url');
+      final buzzerOn = await _storage.read(key: 'buzzer_on');
+      final ledOn = await _storage.read(key: 'led_on');
       
       if (tempEnabled != null) {
         _temperatureAlertEnabled.value = tempEnabled == 'true';
@@ -63,6 +72,12 @@ class SettingService extends GetxService {
       }
       if (notificationUrl != null) {
         _notificationUrl.value = notificationUrl;
+      }
+      if (buzzerOn != null) {
+        _buzzerOn.value = buzzerOn == 'true';
+      }
+      if (ledOn != null) {
+        _ledOn.value = ledOn == 'true';
       }
     } catch (e) {
       print('加载设置失败: $e');
@@ -126,6 +141,26 @@ class SettingService extends GetxService {
       _notificationUrl.value = url;
     } catch (e) {
       print('保存通知 URL 失败: $e');
+    }
+  }
+  
+  /// 保存蜂鸣器状态
+  Future<void> setBuzzerOn(bool on) async {
+    try {
+      await _storage.write(key: 'buzzer_on', value: on.toString());
+      _buzzerOn.value = on;
+    } catch (e) {
+      print('保存蜂鸣器状态失败: $e');
+    }
+  }
+  
+  /// 保存LED状态
+  Future<void> setLedOn(bool on) async {
+    try {
+      await _storage.write(key: 'led_on', value: on.toString());
+      _ledOn.value = on;
+    } catch (e) {
+      print('保存LED状态失败: $e');
     }
   }
 }

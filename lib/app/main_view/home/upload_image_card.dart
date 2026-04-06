@@ -54,6 +54,7 @@ class _UploadImageCardState extends State<UploadImageCard> {
         return;
       }
 
+      final deviceId = authService.currentDeviceId;
       final url = Uri.parse('${Endpoints.baseUrl}${Endpoints.modifyScreenText}');
       final response = await http.post(
         url,
@@ -62,7 +63,7 @@ class _UploadImageCardState extends State<UploadImageCard> {
           'Authorization': 'Bearer $jwtToken',
         },
         body: jsonEncode({
-          'device_id': 'esp32_001',
+          'device_id': deviceId,
           'type': 'text',
           'text': _textController.text,
           'duration': _duration,
@@ -75,7 +76,7 @@ class _UploadImageCardState extends State<UploadImageCard> {
       
       debugPrint('文字上传请求头: Authorization: Bearer ${jwtToken.substring(0, 20)}...');
       debugPrint('文字上传请求体: ${jsonEncode({
-        'device_id': 'esp32_001',
+        'device_id': deviceId,
         'type': 'text',
         'text': _textController.text,
         'duration': _duration,
